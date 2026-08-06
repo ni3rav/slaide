@@ -1,5 +1,58 @@
+import { useEffect, useState, type ReactNode } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import {
+  DeckRepositoryProvider,
+} from './storage/deck-repository-context.tsx'
+import { createDeckRepository, type DeckRepository } from './storage/deck-repository.ts'
+import { EditorPage } from './ui/EditorPage.tsx'
+import { HomePage } from './ui/HomePage.tsx'
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/decks/:deckId" element={<EditorPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function RepositoryGate({ children }: { children: ReactNode }) {
+  const [repository, setRepository] = useState<DeckRepository | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void createDeckRepository().then((created) => {
+      if (cancelled) {
+        void created.dispose()
+        return
+      }
+      setRepository(created)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!repository) {
+    return (
+      <main>
+        <p>Starting Slaide…</p>
+      </main>
+    )
+  }
+
+  return <DeckRepositoryProvider repository={repository}>{children}</DeckRepositoryProvider>
+}
+
 function App() {
-  return <h1>Hello World</h1>
+  return (
+    <BrowserRouter>
+      <RepositoryGate>
+        <AppRoutes />
+      </RepositoryGate>
+    </BrowserRouter>
+  )
 }
 
 export default App

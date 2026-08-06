@@ -11,6 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
+test-results
+playwright-report
+blob-report
+.vitest-attachments
+src/**/__screenshots__
+
 
 # Editor directories and files
 .vscode/*
