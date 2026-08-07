@@ -25,6 +25,7 @@ import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
 import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
 import { importErrorMessage, prepareDeckImportFromFile } from '../slaide-file/import-deck.ts'
+import { requestPersistentStorageAfterFirstDeck } from '../storage/persistent-storage.ts'
 import { ThemeSelector } from './ThemeSelector.tsx'
 
 type DialogState =
@@ -62,7 +63,11 @@ export function HomePage() {
     if (creating) return
     setCreating(true)
     try {
+      const deckCountBefore = (await repository.listDecks()).length
       const created = await repository.createDeck()
+      if (deckCountBefore === 0) {
+        void requestPersistentStorageAfterFirstDeck()
+      }
       navigate(`/decks/${created.deck.id}`)
     } finally {
       setCreating(false)
@@ -104,9 +109,15 @@ export function HomePage() {
     setImporting(true)
     setImportError(null)
     try {
-      const existingTitles = (await repository.listDecks()).map((deck) => deck.title)
-      const prepared = await prepareDeckImportFromFile(file, existingTitles)
+      const existingDecks = await repository.listDecks()
+      const prepared = await prepareDeckImportFromFile(
+        file,
+        existingDecks.map((deck) => deck.title),
+      )
       await repository.importDeck(prepared.deck, prepared.slides)
+      if (existingDecks.length === 0) {
+        void requestPersistentStorageAfterFirstDeck()
+      }
       await refreshDecks()
     } catch (error) {
       setImportError(importErrorMessage(error))

@@ -8,6 +8,7 @@ import { EditorPage } from './ui/EditorPage.tsx'
 import { HomePage } from './ui/HomePage.tsx'
 import { PresentationPage } from './ui/PresentationPage.tsx'
 import { ThemeProvider } from './ui/ThemeProvider.tsx'
+import { AppUpdatePrompt } from './pwa/AppUpdatePrompt.tsx'
 import { ViewportGate } from './ui/ViewportGate.tsx'
 
 function AppRoutes() {
@@ -56,6 +57,7 @@ function App() {
         <ViewportGate>
           <RepositoryGate>
             <AppRoutes />
+            <AppUpdatePrompt />
           </RepositoryGate>
         </ViewportGate>
       </ThemeProvider>
