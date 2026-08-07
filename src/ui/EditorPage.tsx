@@ -13,6 +13,9 @@ import {
   createSceneAutosave,
   type SaveStatus,
 } from '../scene/scene-autosave.ts'
+import { createSlideConstraintController } from '../slide/slide-constraints.ts'
+import { allElementsInsideSlide, constrainAllElements, constrainElementsAfterGesture, toElementsMap } from '../slide/slide-element-bounds.ts'
+import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
 import './editor.css'
 
 type EditorState =
@@ -22,6 +25,15 @@ type EditorState =
 
 type SlaideTestApi = {
   addRectangle: () => void
+  addOversizedRectangle: () => void
+  getCamera: () => { scrollX: number; scrollY: number; zoom: number }
+  getViewport: () => { width: number; height: number }
+  setCamera: (camera: {
+    scrollX?: number
+    scrollY?: number
+    zoom?: number
+  }) => void
+  getStoredElementsInsideSlide: () => boolean
 }
 
 declare global {
@@ -38,6 +50,13 @@ export function EditorPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [leaveWarning, setLeaveWarning] = useState(false)
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(null)
+  const canvasHostRef = useRef<HTMLDivElement | null>(null)
+  const slideConstraintsRef = useRef<ReturnType<
+    typeof createSlideConstraintController
+  > | null>(null)
+  const excalidrawApiRef = useRef<import('@excalidraw/excalidraw/types').ExcalidrawImperativeAPI | null>(
+    null,
+  )
 
   useEffect(() => {
     if (!deckId) {
@@ -94,6 +113,9 @@ export function EditorPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       autosaveRef.current = null
+      slideConstraintsRef.current?.dispose()
+      slideConstraintsRef.current = null
+      excalidrawApiRef.current = null
       delete window.__slaideTest
       void autosave
         .flush()
@@ -161,7 +183,11 @@ export function EditorPage() {
           </div>
         ) : null}
       </header>
-      <div className="editor-canvas" data-testid="excalidraw-host">
+      <div
+        className="editor-canvas"
+        data-testid="excalidraw-host"
+        ref={canvasHostRef}
+      >
         <Excalidraw
           key={state.activeSlide.id}
           initialData={{
@@ -195,6 +221,21 @@ export function EditorPage() {
             }
           }}
           excalidrawAPI={(api) => {
+            excalidrawApiRef.current = api
+            slideConstraintsRef.current?.dispose()
+            slideConstraintsRef.current = createSlideConstraintController(api, () => {
+              const host = canvasHostRef.current
+              if (!host) return null
+              const rect = host.getBoundingClientRect()
+              return {
+                width: rect.width,
+                height: rect.height,
+              }
+            })
+            requestAnimationFrame(() => {
+              slideConstraintsRef.current?.fitSlideToViewport()
+            })
+
             window.__slaideTest = {
               addRectangle() {
                 const created = convertToExcalidrawElements([
@@ -210,9 +251,64 @@ export function EditorPage() {
                   elements: [...api.getSceneElements(), ...created],
                 })
               },
+              addOversizedRectangle() {
+                const created = convertToExcalidrawElements([
+                  {
+                    type: 'rectangle',
+                    x: 0,
+                    y: 0,
+                    width: SLIDE_WIDTH * 2,
+                    height: SLIDE_HEIGHT * 2,
+                  },
+                ])
+                api.updateScene({
+                  elements: constrainAllElements([
+                    ...api.getSceneElements(),
+                    ...created,
+                  ]),
+                })
+              },
+              getCamera() {
+                const { scrollX, scrollY, zoom } = api.getAppState()
+                return { scrollX, scrollY, zoom: zoom.value }
+              },
+              getViewport() {
+                const host = canvasHostRef.current
+                if (!host) {
+                  const { width, height } = api.getAppState()
+                  return { width, height }
+                }
+                const rect = host.getBoundingClientRect()
+                return { width: rect.width, height: rect.height }
+              },
+              setCamera(camera) {
+                const current = api.getAppState()
+                api.updateScene({
+                  appState: {
+                    scrollX: camera.scrollX ?? current.scrollX,
+                    scrollY: camera.scrollY ?? current.scrollY,
+                    zoom: {
+                      value: (camera.zoom ?? current.zoom.value) as never,
+                    },
+                  },
+                })
+              },
+              getStoredElementsInsideSlide() {
+                const elements = api.getSceneElements()
+                return allElementsInsideSlide(elements)
+              },
             }
           }}
+          onDuplicate={(nextElements, previousElements) =>
+            constrainElementsAfterGesture(nextElements, toElementsMap(previousElements))
+          }
           onChange={(elements, appState, files) => {
+            if (slideConstraintsRef.current?.isGestureActive()) {
+              return
+            }
+            if (!allElementsInsideSlide(elements as never[])) {
+              return
+            }
             const scene = toPersistentScene(
               elements,
               appState as unknown as Record<string, unknown>,
