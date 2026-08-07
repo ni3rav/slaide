@@ -11,6 +11,8 @@ declare global {
       isFullscreenDenied: () => boolean
     }
     __fullscreenRequestPaths?: string[]
+    __slaidePresentationRenderDelayMs?: number
+    __slaidePresentationFailSlideIds?: string[]
   }
 }
 
@@ -137,11 +139,12 @@ test.describe('present static slide images', () => {
     await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible()
 
     await page.keyboard.press('ArrowRight')
-    await expect(page.getByText('Slide 2 of 2')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 2 of 2')
     await expect(page.getByTestId('fullscreen-warning')).toHaveCount(0)
 
+    await waitForNavigationThrottle(page)
     await page.keyboard.press('ArrowLeft')
-    await expect(page.getByText('Slide 1 of 2')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 1 of 2')
   })
 
   test('re-enters fullscreen from the warning action', async ({ page }) => {
@@ -223,17 +226,20 @@ test.describe('present static slide images', () => {
     await expect(page.getByText('Slide 1 of 3')).toBeVisible()
 
     await page.getByRole('button', { name: 'Next slide' }).click()
-    await expect(page.getByText('Slide 2 of 3')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 2 of 3')
+
+    await waitForNavigationThrottle(page)
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 3 of 3')
 
     await page.keyboard.press('ArrowRight')
-    await expect(page.getByText('Slide 3 of 3')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 3 of 3')
 
-    await page.keyboard.press('ArrowRight')
-    await expect(page.getByText('Slide 3 of 3')).toBeVisible()
-
+    await waitForNavigationThrottle(page)
     await page.keyboard.press('ArrowLeft')
-    await expect(page.getByText('Slide 2 of 3')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 2 of 3')
 
+    await waitForNavigationThrottle(page)
     await page.keyboard.press('ArrowLeft')
     await expect(page.getByText('Slide 1 of 3')).toBeVisible()
 
@@ -266,6 +272,150 @@ test.describe('present static slide images', () => {
       .poll(() => page.evaluate(() => window.__slaidePresentationTest?.getActiveObjectUrlCount() ?? 0))
       .toBe(0)
   })
+
+  test('retains at most five presentation images while navigating a large deck', async ({
+    page,
+  }) => {
+    await stubFullscreenSuccess(page)
+    await openEditor(page)
+
+    await addSlides(page, 7)
+
+    await presentFromBeginning(page)
+    await expect(page.getByTestId('presentation-slide-image')).toBeVisible({
+      timeout: 15000,
+    })
+
+    for (let index = 0; index < 7; index += 1) {
+      await page.keyboard.press('ArrowRight')
+      await expect(page.getByTestId('presentation-slide-counter')).toHaveText(
+        `Slide ${index + 2} of 8`,
+      )
+      await waitForNavigationThrottle(page)
+    }
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__slaidePresentationTest?.getActiveObjectUrlCount() ?? 0),
+      )
+      .toBeLessThanOrEqual(5)
+  })
+
+  test('shows loading while a delayed target image is still rendering', async ({ page }) => {
+    await stubFullscreenSuccess(page)
+    await page.addInitScript(() => {
+      window.__slaidePresentationRenderDelayMs = 2_000
+    })
+    await openEditor(page)
+
+    await addSlides(page, 5)
+
+    await presentFromBeginning(page)
+    await expect(page.getByTestId('presentation-slide-image')).toBeVisible({
+      timeout: 20_000,
+    })
+
+    await waitForNavigationThrottle(page)
+    await page.keyboard.press('ArrowRight')
+    await waitForNavigationThrottle(page)
+    await page.keyboard.press('ArrowRight')
+    await waitForNavigationThrottle(page)
+    await page.keyboard.press('ArrowRight')
+    await waitForNavigationThrottle(page)
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByTestId('presentation-loading')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 5 of 6')
+    await expect(page.getByTestId('presentation-slide-image')).toBeVisible({
+      timeout: 20_000,
+    })
+  })
+
+  test('ignores rapid navigation input for 300 milliseconds', async ({ page }) => {
+    await stubFullscreenSuccess(page)
+    await page.addInitScript(() => {
+      window.__slaidePresentationRenderDelayMs = 1_000
+    })
+    await openEditor(page)
+
+    await addSlides(page, 3)
+
+    await presentFromBeginning(page)
+    await expect(page.getByTestId('presentation-slide-image')).toBeVisible({
+      timeout: 15000,
+    })
+
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 2 of 4')
+
+    await page.waitForTimeout(350)
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 3 of 4')
+  })
+
+  test('shows Retry and Exit when image generation fails', async ({ page }) => {
+    await stubFullscreenSuccess(page)
+    await openEditor(page)
+
+    await addSlides(page, 5)
+
+    await presentFromBeginning(page)
+    await expect(page.getByTestId('presentation-slide-image')).toBeVisible({
+      timeout: 15000,
+    })
+
+    const failingSlideId = await getSlideIdAtDeckIndex(page, 4)
+
+    await page.evaluate((slideId) => {
+      window.__slaidePresentationFailSlideIds = [slideId]
+    }, failingSlideId)
+
+    for (let index = 0; index < 4; index += 1) {
+      await waitForNavigationThrottle(page)
+      await page.keyboard.press('ArrowRight')
+    }
+
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 5 of 6')
+    await expect(page.getByTestId('presentation-retry')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('presentation-exit')).toBeVisible()
+    await expect(page.getByTestId('presentation-slide-image')).toHaveCount(0)
+  })
+
+  test('revokes evicted image URLs while navigating forward and backward', async ({ page }) => {
+    await stubFullscreenSuccess(page)
+    await openEditor(page)
+
+    await addSlides(page, 6)
+
+    await presentFromBeginning(page)
+    await expect(page.getByTestId('presentation-slide-image')).toBeVisible({
+      timeout: 15000,
+    })
+
+    for (let index = 0; index < 6; index += 1) {
+      await page.keyboard.press('ArrowRight')
+      await waitForNavigationThrottle(page)
+    }
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 7 of 7')
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__slaidePresentationTest?.getActiveObjectUrlCount() ?? 0),
+      )
+      .toBeLessThanOrEqual(5)
+
+    for (let index = 0; index < 6; index += 1) {
+      await page.keyboard.press('ArrowLeft')
+      await waitForNavigationThrottle(page)
+    }
+    await expect(page.getByTestId('presentation-slide-counter')).toHaveText('Slide 1 of 7')
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__slaidePresentationTest?.getActiveObjectUrlCount() ?? 0),
+      )
+      .toBeLessThanOrEqual(5)
+  })
 })
 
 async function openEditor(page: Page): Promise<void> {
@@ -273,6 +423,47 @@ async function openEditor(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'New deck' }).click()
   await expect(page).toHaveURL(/\/decks\/[0-9a-f-]{36}$/i)
   await expect(page.getByTestId('excalidraw-host')).toBeVisible()
+}
+
+async function addSlides(page: Page, count: number): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('button', { name: String(index + 2), exact: true })).toBeVisible()
+  }
+}
+
+async function presentFromBeginning(page: Page): Promise<void> {
+  await page.getByRole('button', { name: '1', exact: true }).click()
+  await page.getByRole('button', { name: 'Present' }).click()
+  const fromBeginning = page.getByRole('button', { name: 'From beginning' })
+  if (await fromBeginning.isVisible()) {
+    await fromBeginning.click()
+  }
+  await expect(page).toHaveURL(/\/present\?start=0$/)
+}
+
+async function waitForNavigationThrottle(page: Page): Promise<void> {
+  await page.waitForTimeout(350)
+}
+
+async function getSlideIdAtDeckIndex(page: Page, index: number): Promise<string> {
+  return page.evaluate(async (slideIndex) => {
+    const deckId = window.location.pathname.split('/')[2]!
+    const request = indexedDB.open('slaide')
+    return await new Promise<string>((resolve, reject) => {
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('decks', 'readonly')
+        const deckRequest = tx.objectStore('decks').get(deckId)
+        deckRequest.onsuccess = () => {
+          const deck = deckRequest.result as { slideOrder: string[] }
+          resolve(deck.slideOrder[slideIndex]!)
+        }
+        deckRequest.onerror = () => reject(deckRequest.error)
+      }
+    })
+  }, index)
 }
 
 async function stubFullscreenSuccess(page: Page): Promise<void> {

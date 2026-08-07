@@ -6,6 +6,7 @@ import {
   createPresentationImageCache,
   type PresentationImageCache,
 } from '../presentation/presentation-image-cache.ts'
+import { canAcceptPresentationNavigation } from '../presentation/presentation-navigation-throttle.ts'
 import {
   exitPresentationFullscreen,
   requestPresentationFullscreen,
@@ -17,7 +18,7 @@ import {
   AlertTitle,
 } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, LoaderCircle, Maximize, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Maximize } from 'lucide-react'
 
 type PresentationState =
   | { status: 'loading' }
@@ -27,10 +28,8 @@ type PresentationState =
       slides: Slide[]
       currentIndex: number
       imageUrl: string | null
-      previousImageUrl: string | null
       imageError: boolean
       failedTargetIndex: number | null
-      isNavigating: boolean
       fullscreenDenied: boolean
       fullscreenWarningDismissed: boolean
     }
@@ -44,6 +43,8 @@ type PresentationTestApi = {
 declare global {
   interface Window {
     __slaidePresentationTest?: PresentationTestApi
+    __slaidePresentationRenderDelayMs?: number
+    __slaidePresentationFailSlideIds?: string[]
   }
 }
 
@@ -65,7 +66,7 @@ export function PresentationPage() {
   const fullscreenEnteredRef = useRef(false)
   const exitingRef = useRef(false)
   const navigationRequestRef = useRef(0)
-  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastNavigationAtRef = useRef<number | null>(null)
   const [state, setState] = useState<PresentationState>({ status: 'loading' })
 
   const exitPresentation = useCallback(() => {
@@ -90,16 +91,15 @@ export function PresentationPage() {
         return
       }
 
+      const request = ++navigationRequestRef.current
+
       setState((previous) =>
-        previous.status === 'ready'
+        previous.status === 'ready' && previous.currentIndex === index
           ? {
               ...previous,
-              currentIndex: index,
               imageUrl: null,
-              previousImageUrl: null,
               imageError: false,
               failedTargetIndex: null,
-              isNavigating: true,
             }
           : previous,
       )
@@ -107,6 +107,8 @@ export function PresentationPage() {
       try {
         const imageUrl = await cache.getObjectUrl(slide.id, slide.scene)
         await preloadPresentationImage(imageUrl)
+        if (request !== navigationRequestRef.current) return
+
         setState((previous) =>
           previous.status === 'ready' && previous.currentIndex === index
             ? {
@@ -114,11 +116,12 @@ export function PresentationPage() {
                 imageUrl,
                 imageError: false,
                 failedTargetIndex: null,
-                isNavigating: false,
               }
             : previous,
         )
+        cache.ensureWindow(slides, index)
       } catch {
+        if (request !== navigationRequestRef.current) return
         setState((previous) =>
           previous.status === 'ready' && previous.currentIndex === index
             ? {
@@ -126,7 +129,6 @@ export function PresentationPage() {
                 imageUrl: null,
                 imageError: true,
                 failedTargetIndex: index,
-                isNavigating: false,
               }
             : previous,
         )
@@ -160,15 +162,15 @@ export function PresentationPage() {
         result.slides.length,
       )
 
+      cache.ensureWindow(result.slides, startIndex)
+
       setState({
         status: 'ready',
         slides: result.slides,
         currentIndex: startIndex,
         imageUrl: null,
-        previousImageUrl: null,
         imageError: false,
         failedTargetIndex: null,
-        isNavigating: true,
         fullscreenDenied: false,
         fullscreenWarningDismissed: false,
       })
@@ -189,13 +191,7 @@ export function PresentationPage() {
       cache.revokeAll()
       cacheRef.current = null
       navigationRequestRef.current += 1
-      if (transitionTimerRef.current) {
-        clearTimeout(transitionTimerRef.current)
-      }
       delete window.__slaidePresentationTest
-      // Only release fullscreen this page adopted; an unconditional exit
-      // would tear down the fullscreen entered from the editor's Present
-      // click during StrictMode's mount/cleanup/mount cycle.
       if (fullscreenEnteredRef.current) {
         fullscreenEnteredRef.current = false
         void exitPresentationFullscreen()
@@ -211,9 +207,6 @@ export function PresentationPage() {
       return
     }
 
-    // Fullscreen is requested from the editor's Present click (the user
-    // gesture); that request may still be resolving, so wait briefly before
-    // falling back to in-page presentation.
     const timer = setTimeout(() => {
       if (document.fullscreenElement) {
         fullscreenEnteredRef.current = true
@@ -267,10 +260,9 @@ export function PresentationPage() {
   }, [state])
 
   const goToSlide = useCallback(
-    async (nextIndex: number) => {
+    (nextIndex: number) => {
       if (
         state.status !== 'ready' ||
-        state.isNavigating ||
         nextIndex === state.currentIndex ||
         nextIndex < 0 ||
         nextIndex >= state.slides.length ||
@@ -279,64 +271,63 @@ export function PresentationPage() {
         return
       }
 
+      const now = Date.now()
+      if (!canAcceptPresentationNavigation(lastNavigationAtRef.current, now)) {
+        return
+      }
+      lastNavigationAtRef.current = now
+
       const slide = state.slides[nextIndex]
       if (!slide) return
 
+      const cache = cacheRef.current
       const request = ++navigationRequestRef.current
+      const cachedUrl = cache.getCachedObjectUrl(slide.id)
+
+      cache.ensureWindow(state.slides, nextIndex)
+
       setState((previous) =>
         previous.status === 'ready'
           ? {
               ...previous,
+              currentIndex: nextIndex,
+              imageUrl: cachedUrl,
               imageError: false,
               failedTargetIndex: null,
-              isNavigating: true,
             }
           : previous,
       )
 
-      try {
-        const imageUrl = await cacheRef.current.getObjectUrl(slide.id, slide.scene)
-        await preloadPresentationImage(imageUrl)
-        if (request !== navigationRequestRef.current) return
+      void (async () => {
+        try {
+          const imageUrl = await cache.getObjectUrl(slide.id, slide.scene)
+          await preloadPresentationImage(imageUrl)
+          if (request !== navigationRequestRef.current) return
 
-        setState((previous) =>
-          previous.status === 'ready'
-            ? {
-                ...previous,
-                currentIndex: nextIndex,
-                previousImageUrl: previous.imageUrl,
-                imageUrl,
-                imageError: false,
-                failedTargetIndex: null,
-                isNavigating: false,
-              }
-            : previous,
-        )
-
-        if (transitionTimerRef.current) {
-          clearTimeout(transitionTimerRef.current)
-        }
-        transitionTimerRef.current = setTimeout(() => {
           setState((previous) =>
-            previous.status === 'ready'
-              ? { ...previous, previousImageUrl: null }
+            previous.status === 'ready' && previous.currentIndex === nextIndex
+              ? {
+                  ...previous,
+                  imageUrl,
+                  imageError: false,
+                  failedTargetIndex: null,
+                }
               : previous,
           )
-          transitionTimerRef.current = null
-        }, 250)
-      } catch {
-        if (request !== navigationRequestRef.current) return
-        setState((previous) =>
-          previous.status === 'ready'
-            ? {
-                ...previous,
-                imageError: true,
-                failedTargetIndex: nextIndex,
-                isNavigating: false,
-              }
-            : previous,
-        )
-      }
+        } catch {
+          if (request !== navigationRequestRef.current) return
+          setState((previous) =>
+            previous.status === 'ready' && previous.currentIndex === nextIndex
+              ? {
+                  ...previous,
+                  imageUrl: null,
+                  imageError: true,
+                  failedTargetIndex: nextIndex,
+                }
+              : previous,
+          )
+        }
+      })()
     },
     [state],
   )
@@ -344,13 +335,13 @@ export function PresentationPage() {
   const goNext = useCallback(() => {
     if (state.status !== 'ready') return
     if (state.currentIndex >= state.slides.length - 1) return
-    void goToSlide(state.currentIndex + 1)
+    goToSlide(state.currentIndex + 1)
   }, [goToSlide, state])
 
   const goPrevious = useCallback(() => {
     if (state.status !== 'ready') return
     if (state.currentIndex <= 0) return
-    void goToSlide(state.currentIndex - 1)
+    goToSlide(state.currentIndex - 1)
   }, [goToSlide, state])
 
   useEffect(() => {
@@ -426,10 +417,8 @@ export function PresentationPage() {
     slides,
     currentIndex,
     imageUrl,
-    previousImageUrl,
     imageError,
     failedTargetIndex,
-    isNavigating,
     fullscreenDenied,
     fullscreenWarningDismissed,
   } = state
@@ -504,60 +493,35 @@ export function PresentationPage() {
               <Button
                 type="button"
                 variant="secondary"
+                data-testid="presentation-retry"
                 onClick={() => {
                   const retryIndex = failedTargetIndex ?? currentIndex
-                  if (imageUrl) {
-                    void goToSlide(retryIndex)
-                  } else if (cacheRef.current) {
+                  if (cacheRef.current) {
                     void loadSlideImage(slides, retryIndex, cacheRef.current)
                   }
                 }}
               >
                 Retry
               </Button>
-              <Button type="button" variant="outline" onClick={exitPresentation}>
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="presentation-exit"
+                onClick={exitPresentation}
+              >
                 Exit
               </Button>
             </div>
           </div>
         ) : imageUrl ? (
-          <div className="relative flex h-full w-full items-center justify-center">
-            {previousImageUrl ? (
-              <img
-                src={previousImageUrl}
-                alt=""
-                aria-hidden="true"
-                className="absolute max-h-full max-w-full object-contain"
-                draggable={false}
-              />
-            ) : null}
-            <img
-              key={imageUrl}
-              src={imageUrl}
-              alt={`Slide ${slideNumber} of ${slides.length}`}
-              className="relative max-h-full max-w-full animate-in object-contain fade-in duration-250"
-              data-testid="presentation-slide-image"
-              draggable={false}
-            />
-            {imageError ? (
-              <div
-                className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-red-950/90 px-3 py-2 text-sm text-red-50 shadow-lg backdrop-blur"
-                role="alert"
-              >
-                <span>
-                  Could not render slide {(failedTargetIndex ?? currentIndex) + 1}.
-                </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void goToSlide(failedTargetIndex ?? currentIndex)}
-                >
-                  Retry
-                </Button>
-              </div>
-            ) : null}
-          </div>
+          <img
+            key={imageUrl}
+            src={imageUrl}
+            alt={`Slide ${slideNumber} of ${slides.length}`}
+            className="max-h-full max-w-full object-contain"
+            data-testid="presentation-slide-image"
+            draggable={false}
+          />
         ) : (
           <p className="text-muted-foreground" data-testid="presentation-loading">
             Loading slide {slideNumber}…
@@ -572,7 +536,7 @@ export function PresentationPage() {
         className="absolute top-1/2 left-4 -translate-y-1/2 rounded-full bg-black/55 text-white opacity-70 backdrop-blur hover:bg-black/75 hover:text-white hover:opacity-100 disabled:opacity-20"
         aria-label="Previous slide"
         title="Previous slide"
-        disabled={currentIndex === 0 || isNavigating}
+        disabled={currentIndex === 0}
         onClick={goPrevious}
       >
         <ChevronLeft />
@@ -584,7 +548,7 @@ export function PresentationPage() {
         className="absolute top-1/2 right-4 -translate-y-1/2 rounded-full bg-black/55 text-white opacity-70 backdrop-blur hover:bg-black/75 hover:text-white hover:opacity-100 disabled:opacity-20"
         aria-label="Next slide"
         title="Next slide"
-        disabled={currentIndex === slides.length - 1 || isNavigating}
+        disabled={currentIndex === slides.length - 1}
         onClick={goNext}
       >
         <ChevronRight />
@@ -600,19 +564,11 @@ export function PresentationPage() {
       >
         <X />
       </Button>
-      {isNavigating && imageUrl ? (
-        <div
-          className="pointer-events-none absolute right-4 bottom-4 flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-1 text-xs text-white/80 backdrop-blur"
-          aria-live="polite"
-        >
-          <LoaderCircle className="size-3 animate-spin" />
-          Preparing slide…
-        </div>
-      ) : null}
 
       <p
         className="pointer-events-none absolute bottom-4 left-4 text-sm text-white/70"
         aria-live="polite"
+        data-testid="presentation-slide-counter"
       >
         Slide {slideNumber} of {slides.length}
       </p>
