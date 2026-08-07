@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { Download, LoaderCircle, Pencil, Trash2, Upload } from "lucide-react";
+import { Download, FileJson, FileText, LoaderCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { exportDeckAsPdf } from "../pdf/export-deck.ts";
 import { useDeckRepository } from "../storage/deck-repository-context.tsx";
 import type { DeckSummary } from "../storage/deck-repository.ts";
 import { exportDeckAsSlaideFile } from "../slaide-file/export-deck.ts";
@@ -130,6 +129,7 @@ export function HomePage() {
         return;
       }
       if (format === "pdf") {
+        const { exportDeckAsPdf } = await import("../pdf/export-deck.ts");
         await exportDeckAsPdf(loaded.deck, loaded.slides);
       } else {
         exportDeckAsSlaideFile(loaded.deck, loaded.slides);
@@ -294,12 +294,14 @@ export function HomePage() {
                         <DropdownMenuItem
                           onSelect={() => void handleExport(deck, "slaide")}
                         >
-                          .slaide
+                          <FileJson />
+                          SLAIDE
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => void handleExport(deck, "pdf")}
                         >
-                          .pdf
+                          <FileText />
+                          PDF
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

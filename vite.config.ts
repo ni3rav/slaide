@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -48,10 +49,58 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,webmanifest}'],
+        // Collect candidates broadly, then keep only the Home shell
+        // referenced by index.html. Editor/Excalidraw chunks cache on use.
+        globPatterns: [
+          '**/*.{js,css,html,ico,png,svg,woff2,woff,webmanifest}',
+        ],
         navigateFallback: '/index.html',
         skipWaiting: false,
         clientsClaim: true,
+        manifestTransforms: [
+          async (entries) => {
+            const indexHtml = fs.readFileSync(
+              path.resolve(rootDir, 'dist/index.html'),
+              'utf8',
+            )
+            const referenced = new Set(
+              [...indexHtml.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(
+                (match) => match[1]!.replace(/^\//, ''),
+              ),
+            )
+
+            const manifest = entries.filter((entry) => {
+              const url = entry.url.replace(/^\//, '')
+              if (referenced.has(url)) return true
+              if (url === 'index.html' || url.endsWith('.webmanifest')) {
+                return true
+              }
+              if (/\.(ico|png|svg|woff2?)$/.test(url)) return true
+              if (url.includes('workbox-window')) return true
+              return false
+            })
+
+            return { manifest, warnings: [] }
+          },
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/assets/') &&
+              url.pathname.endsWith('.js'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'slaide-asset-js',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
     }),
   ],

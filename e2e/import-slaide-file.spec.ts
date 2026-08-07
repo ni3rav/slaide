@@ -194,7 +194,7 @@ async function triggerImport(page: Page, filePath: string | null | undefined): P
 async function triggerHomeExport(page: Page, deckTitle: string) {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: `Export ${deckTitle}` }).click()
-  await page.getByRole('menuitem', { name: 'Export as .slaide' }).click()
+  await page.getByRole('menuitem', { name: 'Slaide' }).click()
   return downloadPromise
 }
 

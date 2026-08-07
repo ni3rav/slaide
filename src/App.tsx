@@ -1,24 +1,42 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import {
   DeckRepositoryProvider,
 } from './storage/deck-repository-context.tsx'
 import { createDeckRepository, type DeckRepository } from './storage/deck-repository.ts'
-import { EditorPage } from './ui/EditorPage.tsx'
 import { HomePage } from './ui/HomePage.tsx'
-import { PresentationPage } from './ui/PresentationPage.tsx'
 import { ThemeProvider } from './ui/ThemeProvider.tsx'
 import { AppUpdatePrompt } from './pwa/AppUpdatePrompt.tsx'
 import { ViewportGate } from './ui/ViewportGate.tsx'
 
+const EditorPage = lazy(async () => {
+  const module = await import('./ui/EditorPage.tsx')
+  return { default: module.EditorPage }
+})
+
+const PresentationPage = lazy(async () => {
+  const module = await import('./ui/PresentationPage.tsx')
+  return { default: module.PresentationPage }
+})
+
+function RouteFallback() {
+  return (
+    <main className="p-6">
+      <p className="text-muted-foreground">Loading…</p>
+    </main>
+  )
+}
+
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/decks/:deckId/present" element={<PresentationPage />} />
-      <Route path="/decks/:deckId" element={<EditorPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/decks/:deckId/present" element={<PresentationPage />} />
+        <Route path="/decks/:deckId" element={<EditorPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 

@@ -1,9 +1,9 @@
-import { PDFDocument } from 'pdf-lib'
 import { renderSlideToPngBlob } from '../presentation/slide-to-png.ts'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
 import type { Slide } from '../storage/deck-repository.ts'
 
 export async function createDeckPdfBlob(slides: Slide[]): Promise<Blob> {
+  const { PDFDocument } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
 
   for (const slide of slides) {

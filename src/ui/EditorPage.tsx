@@ -33,6 +33,8 @@ import {
   Copy,
   Download,
   Eye,
+  FileJson,
+  FileText,
   GripVertical,
   Home,
   LoaderCircle,
@@ -45,7 +47,6 @@ import {
 import { SlidePreviewPanel } from "../preview/SlidePreviewPanel.tsx";
 import { useSlidePreview } from "../preview/use-slide-preview.ts";
 import type { SlidePreviewSession } from "../preview/use-slide-preview.ts";
-import { exportDeckAsPdf } from "../pdf/export-deck.ts";
 import type { Scene } from "../storage/deck-repository.ts";
 import { useDeckRepository } from "../storage/deck-repository-context.tsx";
 import type { Deck, Slide } from "../storage/deck-repository.ts";
@@ -646,6 +647,7 @@ export function EditorPage() {
       }
 
       if (format === "pdf") {
+        const { exportDeckAsPdf } = await import("../pdf/export-deck.ts");
         await exportDeckAsPdf(loaded.deck, loaded.slides);
       } else {
         exportDeckAsSlaideFile(loaded.deck, loaded.slides);
@@ -930,10 +932,12 @@ export function EditorPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => void handleExport("slaide")}>
-                  .slaide
+                  <FileJson />
+                  SLAIDE
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void handleExport("pdf")}>
-                  .pdf
+                  <FileText />
+                  PDF
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
