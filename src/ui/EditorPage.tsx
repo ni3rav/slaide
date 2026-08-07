@@ -35,6 +35,7 @@ import {
   Eye,
   GripVertical,
   Home,
+  LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -44,6 +45,7 @@ import {
 import { SlidePreviewPanel } from "../preview/SlidePreviewPanel.tsx";
 import { useSlidePreview } from "../preview/use-slide-preview.ts";
 import type { SlidePreviewSession } from "../preview/use-slide-preview.ts";
+import { exportDeckAsPdf } from "../pdf/export-deck.ts";
 import type { Scene } from "../storage/deck-repository.ts";
 import { useDeckRepository } from "../storage/deck-repository-context.tsx";
 import type { Deck, Slide } from "../storage/deck-repository.ts";
@@ -83,6 +85,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { useTheme } from "./ThemeProvider.tsx";
 import { ThemeSelector } from "./ThemeSelector.tsx";
@@ -132,7 +140,10 @@ export function EditorPage() {
   const [checkedSlideIds, setCheckedSlideIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [exportError, setExportError] = useState(false);
+  const [exportFailureStage, setExportFailureStage] = useState<
+    "export" | "save" | null
+  >(null);
+  const [exporting, setExporting] = useState(false);
   const [activeDragSlideId, setActiveDragSlideId] = useState<string | null>(
     null,
   );
@@ -454,9 +465,8 @@ export function EditorPage() {
       deck: duplicated.deck,
       slides: duplicated.slides,
       activeSlide:
-        duplicated.slides.find(
-          (slide) => slide.id === state.activeSlide.id,
-        ) ?? state.activeSlide,
+        duplicated.slides.find((slide) => slide.id === state.activeSlide.id) ??
+        state.activeSlide,
       editMode: "editable",
     });
   }
@@ -614,26 +624,37 @@ export function EditorPage() {
     setPresentStartDialogOpen(true);
   }
 
-  async function handleExport() {
-    if (state.status !== "ok" || !deckId) return;
-    setExportError(false);
+  async function handleExport(format: "pdf" | "slaide") {
+    if (state.status !== "ok" || !deckId || exporting) return;
+    setExportFailureStage(null);
+    setExporting(true);
 
-    if (state.editMode === "editable") {
-      try {
-        await autosaveRef.current?.flush();
-      } catch {
-        setExportError(true);
+    try {
+      if (state.editMode === "editable") {
+        try {
+          await autosaveRef.current?.flush();
+        } catch {
+          setExportFailureStage("save");
+          return;
+        }
+      }
+
+      const loaded = await repository.loadDeck(deckId);
+      if (loaded.status !== "ok") {
+        setState({ status: "unavailable", reason: loaded.status });
         return;
       }
-    }
 
-    const loaded = await repository.loadDeck(deckId);
-    if (loaded.status !== "ok") {
-      setState({ status: "unavailable", reason: loaded.status });
-      return;
+      if (format === "pdf") {
+        await exportDeckAsPdf(loaded.deck, loaded.slides);
+      } else {
+        exportDeckAsSlaideFile(loaded.deck, loaded.slides);
+      }
+    } catch {
+      setExportFailureStage("export");
+    } finally {
+      setExporting(false);
     }
-
-    exportDeckAsSlaideFile(loaded.deck, loaded.slides);
   }
 
   if (state.status === "loading") {
@@ -767,16 +788,10 @@ export function EditorPage() {
                       onSelect={() => void handleSelectSlide(slide.id)}
                       onToggleChecked={() => toggleSlideChecked(slide.id)}
                       onTogglePreview={() =>
-                        openPreview(
-                          slide,
-                          slide.id === state.activeSlide.id,
-                        )
+                        openPreview(slide, slide.id === state.activeSlide.id)
                       }
                       onPreviewRetry={() =>
-                        retryPreview(
-                          slide,
-                          slide.id === state.activeSlide.id,
-                        )
+                        retryPreview(slide, slide.id === state.activeSlide.id)
                       }
                       onPreviewCloseComplete={handlePreviewCloseComplete}
                       onKeyboardReorder={(insertionIndex) =>
@@ -894,18 +909,34 @@ export function EditorPage() {
               <Presentation />
               Present
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5"
-              aria-label="Export deck"
-              title="Export deck"
-              onClick={() => void handleExport()}
-            >
-              <Download />
-              Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5"
+                  aria-label={exporting ? "Exporting deck" : "Export deck"}
+                  title={exporting ? "Exporting deck" : "Export deck"}
+                  disabled={exporting}
+                >
+                  {exporting ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <Download />
+                  )}
+                  {exporting ? "Exporting…" : "Export"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => void handleExport("slaide")}>
+                  .slaide
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void handleExport("pdf")}>
+                  .pdf
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ThemeSelector labeled />
           </div>
         </header>
@@ -923,7 +954,7 @@ export function EditorPage() {
             </AlertDescription>
           </Alert>
         ) : null}
-        {exportError ? (
+        {exportFailureStage !== null ? (
           <Alert
             className="rounded-none border-x-0 border-t-0"
             role="alert"
@@ -931,8 +962,9 @@ export function EditorPage() {
           >
             <AlertTitle>Export failed</AlertTitle>
             <AlertDescription>
-              Your latest changes could not be saved. Fix the save error before
-              exporting.
+              {exportFailureStage === "save"
+                ? "Your latest changes could not be saved. Fix the save error before exporting."
+                : "This deck could not be exported. Try again."}
             </AlertDescription>
           </Alert>
         ) : null}

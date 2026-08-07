@@ -48,6 +48,21 @@ describe('createSceneAutosave', () => {
     vi.useRealTimers()
   })
 
+  it('reports a failed background save when later flushed', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn<() => Promise<void>>().mockRejectedValue(new Error('quota'))
+    const autosave = createSceneAutosave({ save })
+
+    autosave.schedule(scene('draft'))
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(autosave.getStatus()).toBe('failed')
+    await expect(autosave.flush()).rejects.toThrow('Scene save failed')
+
+    autosave.dispose()
+    vi.useRealTimers()
+  })
+
   it('ignores unchanged scenes so status does not flicker', async () => {
     vi.useFakeTimers()
     const save = vi.fn(async () => undefined)

@@ -252,6 +252,7 @@ async function renameDeck(page: Page, title: string): Promise<void> {
 async function triggerHomeExport(page: Page, deckTitle: string) {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: `Export ${deckTitle}` }).click()
+  await page.getByRole('menuitem', { name: 'Export as .slaide' }).click()
   return downloadPromise
 }
 

@@ -28,4 +28,4 @@ Browser-local storage can be cleared or evicted. Users need a backup and transfe
 - JSON is inspectable but may be large when scenes contain images.
 - Import needs strict runtime validation and migration rules.
 - The format must evolve through explicit versions.
-- PDF, PNG, and PPTX deck export remain separate deferred features.
+- PDF deck export is addressed separately by ADR-0006; PNG and PPTX export remain deferred.

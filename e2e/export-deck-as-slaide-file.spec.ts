@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+import { PDFDocument } from 'pdf-lib'
 
 declare global {
   interface Window {
@@ -78,6 +79,28 @@ test.describe('export one deck as a slaide file', () => {
     expect(download.suggestedFilename()).toBe('Export me.slaide')
   })
 
+  test('exports a complete deck from the home screen as PDF', async ({ page }) => {
+    await openEditor(page)
+    await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(2)
+    await page.getByRole('link', { name: 'Home' }).click()
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export Untitled deck' }).click()
+    await page.getByRole('menuitem', { name: 'Export as .pdf' }).click()
+    const download = await downloadPromise
+
+    expect(download.suggestedFilename()).toBe('Untitled deck.pdf')
+    const filePath = await download.path()
+    expect(filePath).not.toBeNull()
+    const pdf = await PDFDocument.load(await readFile(filePath!))
+    expect(pdf.getPageCount()).toBe(2)
+    expect(pdf.getPages().map((page) => page.getSize())).toEqual([
+      { width: 1920, height: 1080 },
+      { width: 1920, height: 1080 },
+    ])
+  })
+
   test('force-saves from the editor before exporting the active deck', async ({ page }) => {
     await openEditor(page)
     const deckId = page.url().split('/').at(-1)!
@@ -87,6 +110,7 @@ test.describe('export one deck as a slaide file', () => {
 
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export deck' }).click()
+    await page.getByRole('menuitem', { name: 'Export as .slaide' }).click()
     const download = await downloadPromise
 
     const exported = await readExportedSlaideFile(download)
@@ -94,6 +118,21 @@ test.describe('export one deck as a slaide file', () => {
     expect(
       exported.slides[0]?.scene.elements.some((element) => element.type === 'rectangle'),
     ).toBe(true)
+  })
+
+  test('exports the active deck from the editor as PDF', async ({ page }) => {
+    await openEditor(page)
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export deck' }).click()
+    await page.getByRole('menuitem', { name: 'Export as .pdf' }).click()
+    const download = await downloadPromise
+
+    expect(download.suggestedFilename()).toBe('Untitled deck.pdf')
+    const filePath = await download.path()
+    expect(filePath).not.toBeNull()
+    const pdf = await PDFDocument.load(await readFile(filePath!))
+    expect(pdf.getPageCount()).toBe(1)
   })
 
   test('blocks editor export and shows a clear error when force-save fails', async ({
@@ -108,7 +147,6 @@ test.describe('export one deck as a slaide file', () => {
       const originalPut = IDBObjectStore.prototype.put
       IDBObjectStore.prototype.put = function patchedPut(value, key) {
         if (this.name === 'slides') {
-          IDBObjectStore.prototype.put = originalPut
           this.transaction.abort()
         }
         return originalPut.call(this, value, key)
@@ -116,7 +154,11 @@ test.describe('export one deck as a slaide file', () => {
     })
 
     await page.evaluate(() => window.__slaideTest!.addRectangle())
+    await expect(page.getByTestId('save-status')).toHaveText('Save failed', {
+      timeout: 5000,
+    })
     await page.getByRole('button', { name: 'Export deck' }).click()
+    await page.getByRole('menuitem', { name: 'Export as .slaide' }).click()
 
     await expect(page.getByTestId('export-error')).toBeVisible()
     await expect(page.getByText('Export failed')).toBeVisible()
@@ -161,6 +203,7 @@ async function renameDeck(page: Page, title: string): Promise<void> {
 async function triggerHomeExport(page: Page, deckTitle: string) {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: `Export ${deckTitle}` }).click()
+  await page.getByRole('menuitem', { name: 'Export as .slaide' }).click()
   return downloadPromise
 }
 

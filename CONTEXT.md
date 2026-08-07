@@ -48,6 +48,10 @@ A temporary PNG used to display a slide in presentation mode. Presentation mode 
 
 A versioned JSON backup with a `.slaide` extension. One Slaide file contains exactly one deck, its ordered slides, and their scenes.
 
+### PDF file
+
+A downloaded document containing exactly one complete deck in slide order, with one slide on each borderless 16:9 page.
+
 ### Home screen
 
 The deck-management surface. It creates, opens, renames, exports, imports, and deletes decks.
@@ -112,3 +116,4 @@ A fullscreen or in-page display mode that navigates static presentation images.
 - [ADR-0003: Fixed slide boundaries through public APIs](docs/adr/0003-fixed-slide-boundaries-through-public-apis.md)
 - [ADR-0004: Versioned Slaide import and export](docs/adr/0004-versioned-slaide-import-export.md)
 - [ADR-0005: Static-image presentation rendering](docs/adr/0005-static-image-presentation-rendering.md)
+- [ADR-0006: Raster PDF deck export](docs/adr/0006-raster-pdf-deck-export.md)

@@ -100,7 +100,10 @@ export function createSceneAutosave(
       if (inFlight) {
         await inFlight.catch(() => undefined)
       }
-      if (!toSave) return
+      if (!toSave) {
+        if (status === 'failed') throw new Error('Scene save failed')
+        return
+      }
       inFlight = commit(toSave)
       await inFlight
     },
