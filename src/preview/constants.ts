@@ -1,0 +1,1 @@
+export const PREVIEW_CLOSE_DURATION_MS = 200

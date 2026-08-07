@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type MouseEvent, Fragment } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  Fragment,
+} from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   DndContext,
@@ -25,6 +32,7 @@ import {
   ArrowLeftRight,
   Copy,
   Download,
+  Eye,
   GripVertical,
   Home,
   PanelLeftClose,
@@ -33,6 +41,10 @@ import {
   Presentation,
   Trash2,
 } from "lucide-react";
+import { SlidePreviewPanel } from "../preview/SlidePreviewPanel.tsx";
+import { useSlidePreview } from "../preview/use-slide-preview.ts";
+import type { SlidePreviewSession } from "../preview/use-slide-preview.ts";
+import type { Scene } from "../storage/deck-repository.ts";
 import { useDeckRepository } from "../storage/deck-repository-context.tsx";
 import type { Deck, Slide } from "../storage/deck-repository.ts";
 import {
@@ -141,6 +153,41 @@ export function EditorPage() {
   > | null>(null);
   const themeFromAppRef = useRef(theme);
   const suppressExcalidrawThemeSyncRef = useRef(false);
+
+  const resolveSceneForPreview = useCallback(
+    async (slide: Slide, isActive: boolean): Promise<Scene> => {
+      if (isActive && state.status === "ok" && state.editMode === "editable") {
+        try {
+          await autosaveRef.current?.flush();
+        } catch {
+          // Fall back to the last mounted scene if flush fails.
+        }
+        const api = excalidrawApiRef.current;
+        if (api) {
+          return toPersistentScene(
+            api.getSceneElements(),
+            api.getAppState() as unknown as Record<string, unknown>,
+            api.getFiles() as unknown as Record<string, unknown>,
+          );
+        }
+      }
+
+      if (state.status === "ok") {
+        const stored = state.slides.find((entry) => entry.id === slide.id);
+        if (stored) return stored.scene;
+      }
+
+      return slide.scene;
+    },
+    [state],
+  );
+
+  const {
+    session: previewSession,
+    openPreview,
+    handleCloseComplete: handlePreviewCloseComplete,
+    retryPreview,
+  } = useSlidePreview({ resolveScene: resolveSceneForPreview });
 
   useEffect(() => {
     themeFromAppRef.current = theme;
@@ -707,8 +754,30 @@ export function EditorPage() {
                       isReadOnly={isReadOnly || isSlideReordering}
                       isDragging={activeDragSlideId === slide.id}
                       slideCount={state.slides.length}
+                      isPreviewOpen={
+                        previewSession?.slideId === slide.id &&
+                        previewSession.panelState !== "closing"
+                      }
+                      previewSession={
+                        previewSession?.slideId === slide.id
+                          ? previewSession
+                          : null
+                      }
                       onSelect={() => void handleSelectSlide(slide.id)}
                       onToggleChecked={() => toggleSlideChecked(slide.id)}
+                      onTogglePreview={() =>
+                        openPreview(
+                          slide,
+                          slide.id === state.activeSlide.id,
+                        )
+                      }
+                      onPreviewRetry={() =>
+                        retryPreview(
+                          slide,
+                          slide.id === state.activeSlide.id,
+                        )
+                      }
+                      onPreviewCloseComplete={handlePreviewCloseComplete}
                       onKeyboardReorder={(insertionIndex) =>
                         void commitSlideReorder(slide.id, insertionIndex)
                       }
@@ -1113,8 +1182,13 @@ type SortableSlideRowProps = {
   isReadOnly: boolean;
   isDragging: boolean;
   slideCount: number;
+  isPreviewOpen: boolean;
+  previewSession: SlidePreviewSession | null;
   onSelect: () => void;
   onToggleChecked: () => void;
+  onTogglePreview: () => void;
+  onPreviewRetry: () => void;
+  onPreviewCloseComplete: () => void;
   onKeyboardReorder: (insertionIndex: number) => void;
 };
 
@@ -1126,8 +1200,13 @@ function SortableSlideRow({
   isReadOnly,
   isDragging,
   slideCount,
+  isPreviewOpen,
+  previewSession,
   onSelect,
   onToggleChecked,
+  onTogglePreview,
+  onPreviewRetry,
+  onPreviewCloseComplete,
   onKeyboardReorder,
 }: SortableSlideRowProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform } =
@@ -1145,61 +1224,85 @@ function SortableSlideRow({
     <li
       ref={setNodeRef}
       style={style}
-      className="group flex items-start gap-1.5"
+      className="group flex flex-col gap-0"
       data-slide-id={slide.id}
     >
-      <div className="flex w-5 shrink-0 flex-col items-center gap-1 pt-1">
-        <button
-          type="button"
-          ref={setActivatorNodeRef}
-          className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-30"
-          aria-label={`Reorder slide ${index + 1}`}
-          disabled={isReadOnly}
-          onClick={(event) => event.preventDefault()}
-          {...attributes}
-          {...listeners}
-          onKeyDown={(event) => {
-            if (listeners?.onKeyDown) {
-              listeners.onKeyDown(event);
-            }
-            if (event.defaultPrevented || isDragging) return;
+      <div className="flex items-start gap-1.5">
+        <div className="flex w-5 shrink-0 flex-col items-center gap-1 pt-1">
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-30"
+            aria-label={`Reorder slide ${index + 1}`}
+            disabled={isReadOnly}
+            onClick={(event) => event.preventDefault()}
+            {...attributes}
+            {...listeners}
+            onKeyDown={(event) => {
+              if (listeners?.onKeyDown) {
+                listeners.onKeyDown(event);
+              }
+              if (event.defaultPrevented || isDragging) return;
 
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              onKeyboardReorder(Math.min(index + 2, slideCount));
-            } else if (event.key === "ArrowUp" && index > 0) {
-              event.preventDefault();
-              onKeyboardReorder(index);
-            }
-          }}
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                onKeyboardReorder(Math.min(index + 2, slideCount));
+              } else if (event.key === "ArrowUp" && index > 0) {
+                event.preventDefault();
+                onKeyboardReorder(index);
+              }
+            }}
+          >
+            <GripVertical className="size-3.5" aria-hidden="true" />
+          </button>
+          <input
+            type="checkbox"
+            className="size-3.5 shrink-0 accent-primary"
+            checked={isChecked}
+            disabled={isReadOnly}
+            aria-label={`Select slide ${index + 1}`}
+            onChange={onToggleChecked}
+            onClick={(event) => event.stopPropagation()}
+          />
+          <button
+            type="button"
+            className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-30"
+            aria-label={`Preview slide ${index + 1}`}
+            aria-expanded={isPreviewOpen}
+            disabled={isReadOnly}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTogglePreview();
+            }}
+          >
+            <Eye className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className={`h-auto min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-md border p-0 shadow-none ${
+            isActive
+              ? "border-primary ring-2 ring-primary/30"
+              : "border-border hover:border-foreground/25"
+          }`}
+          aria-current={isActive ? "true" : undefined}
+          onClick={onSelect}
         >
-          <GripVertical className="size-3.5" aria-hidden="true" />
-        </button>
-        <input
-          type="checkbox"
-          className="size-3.5 shrink-0 accent-primary"
-          checked={isChecked}
-          disabled={isReadOnly}
-          aria-label={`Select slide ${index + 1}`}
-          onChange={onToggleChecked}
-          onClick={(event) => event.stopPropagation()}
-        />
+          <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
+            {index + 1}
+          </span>
+        </Button>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        className={`h-auto min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-md border p-0 shadow-none ${
-          isActive
-            ? "border-primary ring-2 ring-primary/30"
-            : "border-border hover:border-foreground/25"
-        }`}
-        aria-current={isActive ? "true" : undefined}
-        onClick={onSelect}
-      >
-        <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
-          {index + 1}
-        </span>
-      </Button>
+      {previewSession ? (
+        <SlidePreviewPanel
+          slideNumber={index + 1}
+          state={previewSession.panelState}
+          imageUrl={previewSession.imageUrl}
+          onRetry={onPreviewRetry}
+          onCloseComplete={onPreviewCloseComplete}
+        />
+      ) : null}
     </li>
   );
 }
@@ -1214,28 +1317,33 @@ function SlideRowPreview({
   isChecked: boolean;
 }) {
   return (
-    <div className="flex w-44 items-start gap-1.5 rounded-md bg-background p-1 shadow-md">
-      <div className="flex w-5 shrink-0 flex-col items-center gap-1 pt-1">
-        <span className="inline-flex size-5 items-center justify-center text-muted-foreground">
-          <GripVertical className="size-3.5" aria-hidden="true" />
-        </span>
-        <input
-          type="checkbox"
-          className="size-3.5 shrink-0 accent-primary"
-          checked={isChecked}
-          readOnly
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-      </div>
-      <div
-        className={`min-w-0 flex-1 overflow-hidden rounded-md border ${
-          isActive ? "border-primary ring-2 ring-primary/30" : "border-border"
-        }`}
-      >
-        <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
-          {index + 1}
-        </span>
+    <div className="flex w-44 flex-col gap-0 rounded-md bg-background p-1 shadow-md">
+      <div className="flex items-start gap-1.5">
+        <div className="flex w-5 shrink-0 flex-col items-center gap-1 pt-1">
+          <span className="inline-flex size-5 items-center justify-center text-muted-foreground">
+            <GripVertical className="size-3.5" aria-hidden="true" />
+          </span>
+          <input
+            type="checkbox"
+            className="size-3.5 shrink-0 accent-primary"
+            checked={isChecked}
+            readOnly
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <span className="inline-flex size-5 items-center justify-center text-muted-foreground">
+            <Eye className="size-3.5" aria-hidden="true" />
+          </span>
+        </div>
+        <div
+          className={`min-w-0 flex-1 overflow-hidden rounded-md border ${
+            isActive ? "border-primary ring-2 ring-primary/30" : "border-border"
+          }`}
+        >
+          <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
+            {index + 1}
+          </span>
+        </div>
       </div>
     </div>
   );
