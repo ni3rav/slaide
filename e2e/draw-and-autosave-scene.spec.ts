@@ -93,7 +93,7 @@ test.describe('draw and autosave one scene', () => {
     await page.evaluate(
       async ({ id }) => {
         const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('slaide', 1)
+          const request = indexedDB.open('slaide', 2)
           request.onsuccess = () => resolve(request.result)
           request.onerror = () => reject(request.error ?? new Error('open failed'))
         })
@@ -177,7 +177,7 @@ async function openEditor(page: Page): Promise<void> {
 async function readActiveSlideId(page: Page, deckId: string): Promise<string> {
   return page.evaluate(async (id) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('slaide', 1)
+      const request = indexedDB.open('slaide', 2)
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('open failed'))
     })
@@ -202,7 +202,7 @@ async function readStoredScene(
 }> {
   return page.evaluate(async (id) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('slaide', 1)
+      const request = indexedDB.open('slaide', 2)
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error ?? new Error('open failed'))
     })

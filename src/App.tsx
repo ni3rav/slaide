@@ -6,6 +6,8 @@ import {
 import { createDeckRepository, type DeckRepository } from './storage/deck-repository.ts'
 import { EditorPage } from './ui/EditorPage.tsx'
 import { HomePage } from './ui/HomePage.tsx'
+import { ThemeProvider } from './ui/ThemeProvider.tsx'
+import { ViewportGate } from './ui/ViewportGate.tsx'
 
 function AppRoutes() {
   return (
@@ -48,9 +50,13 @@ function RepositoryGate({ children }: { children: ReactNode }) {
 function App() {
   return (
     <BrowserRouter>
-      <RepositoryGate>
-        <AppRoutes />
-      </RepositoryGate>
+      <ThemeProvider>
+        <ViewportGate>
+          <RepositoryGate>
+            <AppRoutes />
+          </RepositoryGate>
+        </ViewportGate>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

@@ -47,7 +47,7 @@ test.describe('create and reopen a local deck', () => {
 
     await page.evaluate(async (id) => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('slaide', 1)
+        const request = indexedDB.open('slaide', 2)
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error ?? new Error('open failed'))
       })
