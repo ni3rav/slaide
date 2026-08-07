@@ -23,7 +23,7 @@ test.describe('prevent concurrent deck editing', () => {
     await waitForDeckLockHeld(editor, deckId)
     await openDeck(viewer, deckId)
 
-    await expect(editor.getByRole('status')).toHaveText('Saved')
+    await expect(editor.getByTestId('save-status')).toHaveText('Saved')
     await expect(viewer.getByTestId('readonly-notice')).toBeVisible()
     await expect(viewer.getByTestId('readonly-notice')).toContainText(
       'open for editing in another tab or window',
@@ -51,7 +51,7 @@ test.describe('prevent concurrent deck editing', () => {
     await expect(viewer.getByTestId('readonly-notice')).toHaveCount(0, {
       timeout: 5000,
     })
-    await expect(viewer.getByRole('status')).toHaveText('Saved')
+    await expect(viewer.getByTestId('save-status')).toHaveText('Saved')
     await expect(viewer.getByTestId('toolbar-rectangle')).toBeVisible()
 
     await context.close()
@@ -134,8 +134,8 @@ test.describe('prevent concurrent deck editing', () => {
     const firstDeckId = await createDeck(firstEditor)
     const secondDeckId = await createDeck(secondEditor)
 
-    await expect(firstEditor.getByRole('status')).toHaveText('Saved')
-    await expect(secondEditor.getByRole('status')).toHaveText('Saved')
+    await expect(firstEditor.getByTestId('save-status')).toHaveText('Saved')
+    await expect(secondEditor.getByTestId('save-status')).toHaveText('Saved')
     await expect(firstEditor.getByTestId('readonly-notice')).toHaveCount(0)
     await expect(secondEditor.getByTestId('readonly-notice')).toHaveCount(0)
     await expect(firstEditor.getByTestId('toolbar-rectangle')).toBeVisible()

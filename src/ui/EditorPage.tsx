@@ -620,7 +620,12 @@ export function EditorPage() {
               </AlertDescription>
             </Alert>
           ) : (
-            <p role="status" aria-live="polite" className="m-0 text-sm">
+            <p
+              role="status"
+              aria-live="polite"
+              className="m-0 text-sm"
+              data-testid="save-status"
+            >
               {formatSaveStatus(saveStatus)}
             </p>
           )}

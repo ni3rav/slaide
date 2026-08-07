@@ -56,7 +56,7 @@ test.describe('add and navigate independent slides', () => {
 
     await page.waitForFunction(() => window.__slaideTest != null)
     await page.evaluate(() => window.__slaideTest!.addRectangle())
-    await expect(page.getByRole('status')).toHaveText('Saved', { timeout: 5000 })
+    await expect(page.getByTestId('save-status')).toHaveText('Saved', { timeout: 5000 })
 
     const firstSlideId = (await readSlideOrder(page, deckId))[0]!
 

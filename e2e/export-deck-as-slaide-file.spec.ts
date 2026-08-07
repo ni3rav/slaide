@@ -102,7 +102,7 @@ test.describe('export one deck as a slaide file', () => {
     await openEditor(page)
     await page.waitForFunction(() => window.__slaideTest != null)
     await page.evaluate(() => window.__slaideTest!.addRectangle())
-    await expect(page.getByRole('status')).toHaveText('Saved', { timeout: 5000 })
+    await expect(page.getByTestId('save-status')).toHaveText('Saved', { timeout: 5000 })
 
     await page.evaluate(() => {
       const originalPut = IDBObjectStore.prototype.put
