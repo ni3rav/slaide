@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Download, Pencil, Trash2, Upload } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -44,6 +44,15 @@ export function HomePage() {
   const [importing, setImporting] = useState(false)
   const titleInputId = useId()
   const importInputRef = useRef<HTMLInputElement>(null)
+  const dialogTriggerRef = useRef<HTMLElement | null>(null)
+
+  function openDialogFrom(
+    event: MouseEvent<HTMLElement>,
+    next: Exclude<DialogState, { type: 'none' }>,
+  ) {
+    dialogTriggerRef.current = event.currentTarget
+    setDialog(next)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -233,8 +242,12 @@ export function HomePage() {
                       size="icon-sm"
                       aria-label={`Rename ${deck.title}`}
                       title={`Rename ${deck.title}`}
-                      onClick={() =>
-                        setDialog({ type: 'rename', deck, title: deck.title })
+                      onClick={(event) =>
+                        openDialogFrom(event, {
+                          type: 'rename',
+                          deck,
+                          title: deck.title,
+                        })
                       }
                     >
                       <Pencil />
@@ -246,7 +259,9 @@ export function HomePage() {
                       size="icon-sm"
                       aria-label={`Delete ${deck.title}`}
                       title={`Delete ${deck.title}`}
-                      onClick={() => setDialog({ type: 'delete', deck })}
+                      onClick={(event) =>
+                        openDialogFrom(event, { type: 'delete', deck })
+                      }
                     >
                       <Trash2 />
                       <span className="sr-only">Delete {deck.title}</span>
@@ -264,7 +279,12 @@ export function HomePage() {
             if (!open) setDialog({ type: 'none' })
           }}
         >
-          <DialogContent>
+          <DialogContent
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              dialogTriggerRef.current?.focus()
+            }}
+          >
             {dialog.type === 'rename' ? (
               <>
                 <DialogHeader>

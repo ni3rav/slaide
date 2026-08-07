@@ -89,6 +89,39 @@ describe('DeckRepository', () => {
     ])
   })
 
+  it('rejects newer unsupported deck schemas without silent downgrade', async () => {
+    const created = await repository.createDeck()
+    await patchDeckSchemaVersion(databaseName, created.deck.id, 2)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded).toEqual({ status: 'corrupt' })
+
+    const listed = await repository.listDecks()
+    expect(listed).toEqual([
+      {
+        id: created.deck.id,
+        title: 'Untitled deck',
+        slideCount: 1,
+        updatedAt: created.deck.updatedAt,
+      },
+    ])
+
+    const raw = await getDeckRecord(databaseName, created.deck.id)
+    expect(raw).toMatchObject({ schemaVersion: 2, title: 'Untitled deck' })
+  })
+
+  it('rejects newer unsupported slide schemas without silent downgrade', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.deck.slideOrder[0]!
+    await patchSlideSchemaVersion(databaseName, slideId, 99)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded).toEqual({ status: 'corrupt' })
+
+    const raw = await getSlideRecord(databaseName, slideId)
+    expect(raw).toMatchObject({ schemaVersion: 99, id: slideId })
+  })
+
   it('lists decks ordered by most recently modified', async () => {
     const older = await repository.createDeck()
     await waitForNextTimestamp()
@@ -737,6 +770,67 @@ async function patchDeckSlideOrder(
   })
 
   db.close()
+}
+
+async function patchDeckSchemaVersion(
+  databaseName: string,
+  deckId: string,
+  schemaVersion: number,
+): Promise<void> {
+  const db = await openTestDatabase(databaseName)
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('decks', 'readwrite')
+    const store = tx.objectStore('decks')
+    const getRequest = store.get(deckId)
+    getRequest.onsuccess = () => {
+      const deck = getRequest.result as { schemaVersion: number }
+      deck.schemaVersion = schemaVersion
+      store.put(deck)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('patch deck schema failed'))
+  })
+
+  db.close()
+}
+
+async function patchSlideSchemaVersion(
+  databaseName: string,
+  slideId: string,
+  schemaVersion: number,
+): Promise<void> {
+  const db = await openTestDatabase(databaseName)
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('slides', 'readwrite')
+    const store = tx.objectStore('slides')
+    const getRequest = store.get(slideId)
+    getRequest.onsuccess = () => {
+      const slide = getRequest.result as { schemaVersion: number }
+      slide.schemaVersion = schemaVersion
+      store.put(slide)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('patch slide schema failed'))
+  })
+
+  db.close()
+}
+
+async function getDeckRecord(
+  databaseName: string,
+  deckId: string,
+): Promise<unknown> {
+  const db = await openTestDatabase(databaseName)
+  const deck = await new Promise<unknown>((resolve, reject) => {
+    const tx = db.transaction('decks', 'readonly')
+    const request = tx.objectStore('decks').get(deckId)
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('get deck failed'))
+  })
+  db.close()
+  return deck
 }
 
 async function addSlideToDeck(
