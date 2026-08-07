@@ -13,6 +13,8 @@ import {
   createSceneAutosave,
   type SaveStatus,
 } from '../scene/scene-autosave.ts'
+import { useTheme } from './ThemeProvider.tsx'
+import { ThemeSelector } from './ThemeSelector.tsx'
 import './editor.css'
 
 type EditorState =
@@ -33,6 +35,7 @@ declare global {
 export function EditorPage() {
   const { deckId } = useParams<{ deckId: string }>()
   const repository = useDeckRepository()
+  const { theme, setThemePreference } = useTheme()
   const navigate = useNavigate()
   const [state, setState] = useState<EditorState>({ status: 'loading' })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
@@ -137,6 +140,7 @@ export function EditorPage() {
     <main className="editor-page">
       <header className="editor-chrome">
         <h1>{state.deck.title}</h1>
+        <ThemeSelector />
         <p>
           Slide {1} of {state.slides.length}
         </p>
@@ -164,6 +168,7 @@ export function EditorPage() {
       <div className="editor-canvas" data-testid="excalidraw-host">
         <Excalidraw
           key={state.activeSlide.id}
+          theme={theme}
           initialData={{
             elements: initialScene.elements as never[],
             appState: {
@@ -213,6 +218,15 @@ export function EditorPage() {
             }
           }}
           onChange={(elements, appState, files) => {
+            const nextTheme = appState.theme
+            if (
+              (nextTheme === 'light' || nextTheme === 'dark') &&
+              nextTheme !== theme
+            ) {
+              window.setTimeout(() => {
+                void setThemePreference(nextTheme)
+              }, 0)
+            }
             const scene = toPersistentScene(
               elements,
               appState as unknown as Record<string, unknown>,

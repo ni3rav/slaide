@@ -1,3 +1,10 @@
+import {
+  DECKS_STORE,
+  getRecord,
+  openSlaideDatabase,
+  SLIDES_STORE,
+} from './database.ts'
+
 export type DeckId = string
 export type SlideId = string
 
@@ -53,10 +60,7 @@ export type DeckRepository = {
 }
 
 const DEFAULT_DATABASE_NAME = 'slaide'
-const DATABASE_VERSION = 1
 const RECORD_SCHEMA_VERSION = 1
-const DECKS_STORE = 'decks'
-const SLIDES_STORE = 'slides'
 
 const blankScene = (): Scene => ({
   elements: [],
@@ -72,7 +76,7 @@ export async function createDeckRepository(
   options: CreateDeckRepositoryOptions = {},
 ): Promise<DeckRepository> {
   const databaseName = options.databaseName ?? DEFAULT_DATABASE_NAME
-  const db = await openDatabase(databaseName)
+  const db = await openSlaideDatabase(databaseName)
 
   return {
     async createDeck() {
@@ -223,36 +227,6 @@ export async function createDeckRepository(
       db.close()
     },
   }
-}
-
-function openDatabase(databaseName: string): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, DATABASE_VERSION)
-    request.onupgradeneeded = () => {
-      const database = request.result
-      if (!database.objectStoreNames.contains(DECKS_STORE)) {
-        database.createObjectStore(DECKS_STORE, { keyPath: 'id' })
-      }
-      if (!database.objectStoreNames.contains(SLIDES_STORE)) {
-        database.createObjectStore(SLIDES_STORE, { keyPath: 'id' })
-      }
-    }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('Failed to open database'))
-  })
-}
-
-function getRecord<T>(
-  db: IDBDatabase,
-  storeName: string,
-  key: string,
-): Promise<T | undefined> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly')
-    const request = tx.objectStore(storeName).get(key)
-    request.onsuccess = () => resolve(request.result as T | undefined)
-    request.onerror = () => reject(request.error ?? new Error(`Failed to read ${storeName}`))
-  })
 }
 
 function isValidDeck(value: unknown): value is Deck {

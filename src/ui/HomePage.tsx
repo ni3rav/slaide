@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
+import { ThemeSelector } from './ThemeSelector.tsx'
 
 type DialogState =
   | { type: 'none' }
@@ -80,6 +81,7 @@ export function HomePage() {
   return (
     <main>
       <h1>Slaide</h1>
+      <ThemeSelector />
       <div className="home-actions">
         <button type="button" onClick={() => void handleCreateDeck()} disabled={creating}>
           New deck

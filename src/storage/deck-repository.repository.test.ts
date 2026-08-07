@@ -283,7 +283,19 @@ async function getSlideRecord(
 
 function openTestDatabase(databaseName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 1)
+    const request = indexedDB.open(databaseName, 2)
+    request.onupgradeneeded = () => {
+      const database = request.result
+      if (!database.objectStoreNames.contains('decks')) {
+        database.createObjectStore('decks', { keyPath: 'id' })
+      }
+      if (!database.objectStoreNames.contains('slides')) {
+        database.createObjectStore('slides', { keyPath: 'id' })
+      }
+      if (!database.objectStoreNames.contains('settings')) {
+        database.createObjectStore('settings', { keyPath: 'key' })
+      }
+    }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('open failed'))
   })
