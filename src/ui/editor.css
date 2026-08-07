@@ -20,6 +20,15 @@
   margin: 0;
 }
 
+.editor-readonly-notice {
+  flex: 1 1 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #8a6d3b;
+  border-radius: 4px;
+  background: #fff3cd;
+  color: #664d03;
+}
+
 .editor-canvas {
   flex: 1;
   min-height: 0;
