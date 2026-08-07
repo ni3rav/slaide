@@ -147,6 +147,43 @@ describe('DeckRepository', () => {
     expect(await getSlideRecord(databaseName, extraSlideId)).toBeUndefined()
   })
 
+  it('saves a scene with binary files and updates deck last-modified time', async () => {
+    const created = await repository.createDeck()
+    await waitForNextTimestamp()
+
+    const scene = {
+      elements: [{ id: 'rect-1', type: 'rectangle', x: 12, y: 34 }],
+      appState: { viewBackgroundColor: '#ff00aa' },
+      files: {
+        img1: {
+          id: 'img1',
+          mimeType: 'image/png',
+          dataURL: 'data:image/png;base64,abc',
+        },
+      },
+    }
+
+    const saved = await repository.saveScene(created.slides[0]!.id, scene)
+    const loaded = await repository.loadDeck(created.deck.id)
+
+    expect(saved.scene).toEqual(scene)
+    expect(saved.updatedAt).toBeGreaterThan(created.slides[0]!.updatedAt)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.slides[0]?.scene).toEqual(scene)
+    expect(loaded.deck.updatedAt).toBe(saved.updatedAt)
+  })
+
+  it('rejects saveScene when the slide is missing', async () => {
+    await expect(
+      repository.saveScene(crypto.randomUUID(), {
+        elements: [],
+        appState: {},
+        files: {},
+      }),
+    ).rejects.toThrow('Slide not found')
+  })
+
   it('leaves deck and slides unchanged when delete transaction aborts', async () => {
     const created = await repository.createDeck()
     const originalDelete = IDBObjectStore.prototype.delete

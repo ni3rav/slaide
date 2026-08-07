@@ -1,0 +1,43 @@
+.editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 0;
+}
+
+.editor-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.editor-chrome h1,
+.editor-chrome p {
+  margin: 0;
+}
+
+.editor-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.editor-canvas .excalidraw {
+  height: 100%;
+}
+
+/* Hide Extra Tools (frames, embeds, laser, mermaid) and the library sidebar trigger. */
+.editor-canvas .App-toolbar__extra-tools-trigger,
+.editor-canvas .default-sidebar-trigger {
+  display: none !important;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}

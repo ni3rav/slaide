@@ -48,6 +48,7 @@ export type DeckRepository = {
   loadDeck: (deckId: DeckId) => Promise<LoadDeckResult>
   renameDeck: (deckId: DeckId, title: string) => Promise<Deck>
   deleteDeck: (deckId: DeckId) => Promise<void>
+  saveScene: (slideId: SlideId, scene: Scene) => Promise<Slide>
   dispose: () => Promise<void>
 }
 
@@ -182,6 +183,40 @@ export async function createDeckRepository(
         }
         decks.delete(deckId)
       })
+    },
+
+    async saveScene(slideId, scene) {
+      const existing = await getRecord<Slide>(db, SLIDES_STORE, slideId)
+      if (!existing || !isValidSlide(existing, existing.deckId)) {
+        throw new Error('Slide not found')
+      }
+
+      const deck = await getRecord<Deck>(db, DECKS_STORE, existing.deckId)
+      if (!deck || !isValidDeck(deck)) {
+        throw new Error('Deck not found')
+      }
+
+      const now = Date.now()
+      const updatedSlide: Slide = {
+        ...existing,
+        scene,
+        updatedAt: now,
+      }
+      const updatedDeck: Deck = {
+        ...deck,
+        updatedAt: now,
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to save scene'))
+        tx.onabort = () => reject(tx.error ?? new Error('Scene save aborted'))
+        tx.objectStore(SLIDES_STORE).put(updatedSlide)
+        tx.objectStore(DECKS_STORE).put(updatedDeck)
+      })
+
+      return updatedSlide
     },
 
     async dispose() {

@@ -6,6 +6,14 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: 'unit',
+          include: ['src/**/*.test.ts'],
+          exclude: ['src/**/*.repository.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'repository',
           include: ['src/**/*.repository.test.ts'],
           browser: {
