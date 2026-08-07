@@ -6,6 +6,7 @@ import {
 import { createDeckRepository, type DeckRepository } from './storage/deck-repository.ts'
 import { EditorPage } from './ui/EditorPage.tsx'
 import { HomePage } from './ui/HomePage.tsx'
+import { PresentationPage } from './ui/PresentationPage.tsx'
 import { ThemeProvider } from './ui/ThemeProvider.tsx'
 import { ViewportGate } from './ui/ViewportGate.tsx'
 
@@ -13,6 +14,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/decks/:deckId/present" element={<PresentationPage />} />
       <Route path="/decks/:deckId" element={<EditorPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -115,6 +115,8 @@ export function EditorPage() {
   const [activeDragSlideId, setActiveDragSlideId] = useState<string | null>(null)
   const [insertionIndex, setInsertionIndex] = useState<number | null>(null)
   const insertionIndexRef = useRef<number | null>(null)
+  const [presentStartDialogOpen, setPresentStartDialogOpen] = useState(false)
+  const [presentError, setPresentError] = useState(false)
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(null)
   const releaseLockRef = useRef<(() => void) | null>(null)
   const editSessionIdRef = useRef<number | null>(null)
@@ -430,6 +432,35 @@ export function EditorPage() {
     }
   }
 
+  async function startPresentation(startIndex: number) {
+    if (state.status !== 'ok' || !deckId) return
+    setPresentError(false)
+    setPresentStartDialogOpen(false)
+
+    if (state.editMode === 'editable') {
+      try {
+        await autosaveRef.current?.flush()
+      } catch {
+        setPresentError(true)
+        return
+      }
+    }
+
+    navigate(`/decks/${deckId}/present?start=${startIndex}`)
+  }
+
+  function handlePresentClick() {
+    if (state.status !== 'ok') return
+    const activeSlideIndex = state.slides.findIndex(
+      (slide) => slide.id === state.activeSlide.id,
+    )
+    if (activeSlideIndex <= 0) {
+      void startPresentation(0)
+      return
+    }
+    setPresentStartDialogOpen(true)
+  }
+
   async function handleExport() {
     if (state.status !== 'ok' || !deckId) return
     setExportError(false)
@@ -602,7 +633,24 @@ export function EditorPage() {
               </AlertDescription>
             </Alert>
           ) : null}
+          {presentError ? (
+            <Alert className="basis-full" role="alert" data-testid="present-error">
+              <AlertTitle>Presentation failed</AlertTitle>
+              <AlertDescription>
+                Your latest changes could not be saved. Fix the save error before
+                presenting.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePresentClick()}
+            >
+              Present
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -632,6 +680,36 @@ export function EditorPage() {
                 <AlertDialogCancel>Stay</AlertDialogCancel>
                 <AlertDialogAction onClick={() => navigate('/')}>
                   Leave without saving
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog
+            open={presentStartDialogOpen}
+            onOpenChange={setPresentStartDialogOpen}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Start presentation</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Choose where to begin presenting this deck.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (state.status !== 'ok') return
+                    const activeSlideIndex = state.slides.findIndex(
+                      (slide) => slide.id === state.activeSlide.id,
+                    )
+                    void startPresentation(activeSlideIndex)
+                  }}
+                >
+                  From current slide
+                </AlertDialogAction>
+                <AlertDialogAction onClick={() => void startPresentation(0)}>
+                  From beginning
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
