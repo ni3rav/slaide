@@ -29,3 +29,4 @@ e2e/fixtures
 *.njsproj
 *.sln
 *.sw?
+.vercel
