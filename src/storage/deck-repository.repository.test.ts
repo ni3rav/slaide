@@ -264,7 +264,7 @@ describe('DeckRepository', () => {
     expect(loaded.slides).toEqual(created.slides)
   })
 
-  it('leaves deck and slides unchanged when delete transaction aborts', async () => {
+  it('leaves deck and slides unchanged when delete deck transaction aborts', async () => {
     const created = await repository.createDeck()
     const originalDelete = IDBObjectStore.prototype.delete
 
@@ -287,6 +287,126 @@ describe('DeckRepository', () => {
     if (loaded.status !== 'ok') return
     expect(loaded.deck).toEqual(created.deck)
     expect(loaded.slides).toEqual(created.slides)
+  })
+
+  it('leaves deck and slides unchanged when delete slides transaction aborts', async () => {
+    const created = await repository.createDeck()
+    const originalDelete = IDBObjectStore.prototype.delete
+
+    IDBObjectStore.prototype.delete = function patchedDelete(query) {
+      const request = originalDelete.call(this, query)
+      if (this.name === 'slides') {
+        this.transaction.abort()
+      }
+      return request
+    }
+
+    try {
+      await expect(
+        repository.deleteSlides(created.deck.id, created.slides[0]!.id, [
+          created.slides[0]!.id,
+        ]),
+      ).rejects.toThrow()
+    } finally {
+      IDBObjectStore.prototype.delete = originalDelete
+    }
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck).toEqual(created.deck)
+    expect(loaded.slides).toEqual(created.slides)
+  })
+
+  it('deletes checked slides and their scene records in one transaction', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+    const afterB = await repository.insertSlideAfter(created.deck.id, slideB)
+    const slideC = afterB.slide.id
+
+    await repository.saveScene(slideA, {
+      elements: [{ id: 'rect-1', type: 'rectangle' }],
+      appState: {},
+      files: {},
+    })
+
+    const deleted = await repository.deleteSlides(created.deck.id, slideB, [slideA, slideC])
+
+    expect(deleted.deck.slideOrder).toEqual([slideB])
+    expect(deleted.activeSlide.id).toBe(slideB)
+    expect(deleted.slides).toHaveLength(1)
+    expect(await getSlideRecord(databaseName, slideA)).toBeUndefined()
+    expect(await getSlideRecord(databaseName, slideC)).toBeUndefined()
+    expect((await getSlideRecord(databaseName, slideB))).toBeTruthy()
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck.slideOrder).toEqual([slideB])
+    expect(loaded.slides).toHaveLength(1)
+  })
+
+  it('activates the following slide when the active slide is deleted', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+
+    const deleted = await repository.deleteSlides(created.deck.id, slideA, [slideA])
+
+    expect(deleted.deck.slideOrder).toEqual([slideB])
+    expect(deleted.activeSlide.id).toBe(slideB)
+  })
+
+  it('activates the preceding slide when the deleted active slide was last', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+
+    const deleted = await repository.deleteSlides(created.deck.id, slideB, [slideB])
+
+    expect(deleted.deck.slideOrder).toEqual([slideA])
+    expect(deleted.activeSlide.id).toBe(slideA)
+  })
+
+  it('creates and activates one blank slide when every slide is deleted', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+
+    const deleted = await repository.deleteSlides(created.deck.id, slideB, [slideA, slideB])
+
+    expect(deleted.deck.slideOrder).toHaveLength(1)
+    expect(deleted.activeSlide.id).toBe(deleted.deck.slideOrder[0])
+    expect(deleted.activeSlide.scene).toEqual({
+      elements: [],
+      appState: {},
+      files: {},
+    })
+    expect(await getSlideRecord(databaseName, slideA)).toBeUndefined()
+    expect(await getSlideRecord(databaseName, slideB)).toBeUndefined()
+    expect(deleted.deck.slideOrder[0]).not.toBe(slideA)
+    expect(deleted.deck.slideOrder[0]).not.toBe(slideB)
+  })
+
+  it('rejects deleteSlides when no slide ids are provided', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.deleteSlides(created.deck.id, created.slides[0]!.id, []),
+    ).rejects.toThrow('No slides selected for deletion')
+  })
+
+  it('rejects deleteSlides when a slide is not in slide order', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.deleteSlides(created.deck.id, created.slides[0]!.id, [crypto.randomUUID()]),
+    ).rejects.toThrow('Slide not found in deck')
   })
 })
 

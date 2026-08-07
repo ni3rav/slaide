@@ -84,6 +84,7 @@ export function EditorPage() {
   const [state, setState] = useState<EditorState>({ status: 'loading' })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [leaveWarning, setLeaveWarning] = useState(false)
+  const [checkedSlideIds, setCheckedSlideIds] = useState<Set<string>>(() => new Set())
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(null)
   const releaseLockRef = useRef<(() => void) | null>(null)
   const editSessionIdRef = useRef<number | null>(null)
@@ -293,6 +294,36 @@ export function EditorPage() {
     })
   }
 
+  function toggleSlideChecked(slideId: string) {
+    setCheckedSlideIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(slideId)) {
+        next.delete(slideId)
+      } else {
+        next.add(slideId)
+      }
+      return next
+    })
+  }
+
+  async function handleDeleteSlides() {
+    if (state.status !== 'ok' || !deckId || state.editMode !== 'editable') return
+    if (checkedSlideIds.size === 0) return
+    if (!(await flushActiveScene())) return
+
+    const deleted = await repository.deleteSlides(deckId, state.activeSlide.id, [
+      ...checkedSlideIds,
+    ])
+    setCheckedSlideIds(new Set())
+    setState({
+      status: 'ok',
+      deck: deleted.deck,
+      slides: deleted.slides,
+      activeSlide: deleted.activeSlide,
+      editMode: 'editable',
+    })
+  }
+
   async function handleHomeClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
     setLeaveWarning(false)
@@ -336,7 +367,7 @@ export function EditorPage() {
   return (
     <main className="m-0 flex h-svh max-w-none flex-row p-0">
       <aside
-        className="flex w-28 shrink-0 flex-col gap-2 border-r border-border bg-muted/40 p-3"
+        className="flex w-36 shrink-0 flex-col gap-2 border-r border-border bg-muted/40 p-3"
         aria-label="Slides"
       >
         <Button
@@ -348,14 +379,34 @@ export function EditorPage() {
         >
           Add slide
         </Button>
+        {checkedSlideIds.size > 0 && !isReadOnly ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="w-full"
+            onClick={() => void handleDeleteSlides()}
+          >
+            Delete
+          </Button>
+        ) : null}
         <ol className="m-0 flex list-none flex-col gap-1 p-0">
           {state.slides.map((slide, index) => (
-            <li key={slide.id}>
+            <li key={slide.id} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                className="size-4 shrink-0 accent-primary"
+                checked={checkedSlideIds.has(slide.id)}
+                disabled={isReadOnly}
+                aria-label={`Select slide ${index + 1}`}
+                onChange={() => toggleSlideChecked(slide.id)}
+                onClick={(event) => event.stopPropagation()}
+              />
               <Button
                 type="button"
                 variant={slide.id === state.activeSlide.id ? 'secondary' : 'ghost'}
                 size="sm"
-                className="w-full"
+                className="min-w-0 flex-1"
                 aria-current={
                   slide.id === state.activeSlide.id ? 'true' : undefined
                 }

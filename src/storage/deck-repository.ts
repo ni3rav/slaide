@@ -1,3 +1,4 @@
+import { planSlideDeletion } from '../slide/slide-deletion.ts'
 import {
   DECKS_STORE,
   getRecord,
@@ -43,6 +44,12 @@ export type InsertedSlide = {
   slides: Slide[]
 }
 
+export type DeletedSlides = {
+  deck: Deck
+  activeSlide: Slide
+  slides: Slide[]
+}
+
 export type LoadDeckResult =
   | { status: 'ok'; deck: Deck; slides: Slide[] }
   | { status: 'missing' }
@@ -63,6 +70,11 @@ export type DeckRepository = {
   deleteDeck: (deckId: DeckId) => Promise<void>
   saveScene: (slideId: SlideId, scene: Scene) => Promise<Slide>
   insertSlideAfter: (deckId: DeckId, afterSlideId: SlideId) => Promise<InsertedSlide>
+  deleteSlides: (
+    deckId: DeckId,
+    activeSlideId: SlideId,
+    slideIdsToDelete: SlideId[],
+  ) => Promise<DeletedSlides>
   dispose: () => Promise<void>
 }
 
@@ -280,6 +292,89 @@ export async function createDeckRepository(
       }
 
       return { deck: updatedDeck, slide, slides }
+    },
+
+    async deleteSlides(deckId, activeSlideId, slideIdsToDelete) {
+      const deck = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!deck || !isValidDeck(deck)) {
+        throw new Error('Deck not found')
+      }
+
+      if (!deck.slideOrder.includes(activeSlideId)) {
+        throw new Error('Active slide not found in deck')
+      }
+
+      const deleteSet = new Set(slideIdsToDelete)
+      if (deleteSet.size === 0) {
+        throw new Error('No slides selected for deletion')
+      }
+
+      for (const slideId of slideIdsToDelete) {
+        if (!deck.slideOrder.includes(slideId)) {
+          throw new Error('Slide not found in deck')
+        }
+      }
+
+      const plan = planSlideDeletion(deck.slideOrder, activeSlideId, slideIdsToDelete)
+      const now = Date.now()
+      let replacementSlide: Slide | null = null
+      let nextSlideOrder = plan.slideOrder
+
+      if (plan.requiresBlankSlide) {
+        const slideId = crypto.randomUUID()
+        replacementSlide = {
+          id: slideId,
+          schemaVersion: RECORD_SCHEMA_VERSION,
+          deckId,
+          scene: blankScene(),
+          createdAt: now,
+          updatedAt: now,
+        }
+        nextSlideOrder = [slideId]
+      }
+
+      const nextActiveSlideId = plan.requiresBlankSlide
+        ? replacementSlide!.id
+        : plan.nextActiveSlideId!
+
+      const updatedDeck: Deck = {
+        ...deck,
+        slideOrder: nextSlideOrder,
+        updatedAt: now,
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to delete slides'))
+        tx.onabort = () => reject(tx.error ?? new Error('Slide deletion aborted'))
+        const decks = tx.objectStore(DECKS_STORE)
+        const slides = tx.objectStore(SLIDES_STORE)
+
+        for (const slideId of plan.deletedSlideIds) {
+          slides.delete(slideId)
+        }
+        if (replacementSlide) {
+          slides.put(replacementSlide)
+        }
+        decks.put(updatedDeck)
+      })
+
+      const slides: Slide[] = []
+      for (const id of updatedDeck.slideOrder) {
+        const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+        if (!stored || !isValidSlide(stored, deckId)) {
+          throw new Error('Deck could not be loaded after slide deletion')
+        }
+        slides.push(stored)
+      }
+
+      const activeSlide = slides.find((slide) => slide.id === nextActiveSlideId)
+      if (!activeSlide) {
+        throw new Error('Active slide could not be resolved after deletion')
+      }
+
+      return { deck: updatedDeck, activeSlide, slides }
     },
 
     async dispose() {
