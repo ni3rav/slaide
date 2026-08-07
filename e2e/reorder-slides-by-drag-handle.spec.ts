@@ -13,7 +13,9 @@ test.describe('reorder slides by drag handle', () => {
 
     await dragSlideToInsertion(page, 1, 3)
 
-    expect(await readSlideOrder(page, deckId)).toEqual([slideB, slideC, slideA])
+    await expect
+      .poll(() => readSlideOrder(page, deckId))
+      .toEqual([slideB, slideC, slideA])
   })
 
   test('moves one slide upward with an insertion indicator', async ({ page }) => {
@@ -26,7 +28,9 @@ test.describe('reorder slides by drag handle', () => {
 
     await dragSlideToInsertion(page, 3, 0)
 
-    expect(await readSlideOrder(page, deckId)).toEqual([slideC, slideA, slideB])
+    await expect
+      .poll(() => readSlideOrder(page, deckId))
+      .toEqual([slideC, slideA, slideB])
   })
 
   test('moves a slide to the end boundary', async ({ page }) => {
@@ -39,7 +43,9 @@ test.describe('reorder slides by drag handle', () => {
 
     await dragSlideToInsertion(page, 1, 3)
 
-    expect(await readSlideOrder(page, deckId)).toEqual([slideB, slideC, slideA])
+    await expect
+      .poll(() => readSlideOrder(page, deckId))
+      .toEqual([slideB, slideC, slideA])
   })
 
   test('does not reorder when dragging from the slide row button', async ({ page }) => {
@@ -63,7 +69,7 @@ test.describe('reorder slides by drag handle', () => {
     )
     await page.mouse.up()
 
-    expect(await readSlideOrder(page, deckId)).toEqual(before)
+    await expect.poll(() => readSlideOrder(page, deckId)).toEqual(before)
   })
 
   test('preserves checked state after reordering a checked slide', async ({ page }) => {
@@ -77,7 +83,9 @@ test.describe('reorder slides by drag handle', () => {
     await page.getByRole('checkbox', { name: 'Select slide 1' }).check()
     await dragSlideToInsertion(page, 1, 3)
 
-    expect(await readSlideOrder(page, deckId)).toEqual([slideB, slideC, slideA])
+    await expect
+      .poll(() => readSlideOrder(page, deckId))
+      .toEqual([slideB, slideC, slideA])
     await expect(page.getByRole('checkbox', { name: 'Select slide 3' })).toBeChecked()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
   })
@@ -94,7 +102,9 @@ test.describe('reorder slides by drag handle', () => {
     await handle.focus()
     await handle.press('ArrowDown')
 
-    expect(await readSlideOrder(page, deckId)).toEqual([slideB, slideA, slideC])
+    await expect
+      .poll(() => readSlideOrder(page, deckId))
+      .toEqual([slideB, slideA, slideC])
   })
 
   test('persists reordered slide order across reload', async ({ page }) => {
@@ -108,11 +118,11 @@ test.describe('reorder slides by drag handle', () => {
     await dragSlideToInsertion(page, 1, 2)
 
     const expected = [slideB, slideA, slideC]
-    expect(await readSlideOrder(page, deckId)).toEqual(expected)
+    await expect.poll(() => readSlideOrder(page, deckId)).toEqual(expected)
 
     await page.reload()
     await expect(page.getByTestId('excalidraw-host')).toBeVisible()
-    expect(await readSlideOrder(page, deckId)).toEqual(expected)
+    await expect.poll(() => readSlideOrder(page, deckId)).toEqual(expected)
   })
 })
 

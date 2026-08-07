@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
 import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
@@ -259,6 +260,7 @@ export function HomePage() {
                   <DialogTitle>Rename deck</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-2">
+                  <Label htmlFor={titleInputId}>Deck title</Label>
                   <Input
                     id={titleInputId}
                     value={dialog.title}

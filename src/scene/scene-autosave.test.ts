@@ -47,4 +47,35 @@ describe('createSceneAutosave', () => {
     autosave.dispose()
     vi.useRealTimers()
   })
+
+  it('ignores unchanged scenes so status does not flicker', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn(async () => undefined)
+    const statuses: string[] = []
+    const initial = scene('same')
+    const autosave = createSceneAutosave({
+      save,
+      initialScene: initial,
+      onStatusChange: (status) => statuses.push(status),
+    })
+
+    autosave.schedule(scene('same'))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(save).not.toHaveBeenCalled()
+    expect(statuses).toEqual([])
+    expect(autosave.getStatus()).toBe('saved')
+
+    autosave.schedule(scene('changed'))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(statuses).toEqual(['saving', 'saved'])
+
+    autosave.schedule(scene('changed'))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(statuses).toEqual(['saving', 'saved'])
+
+    autosave.dispose()
+    vi.useRealTimers()
+  })
 })

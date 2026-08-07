@@ -11,7 +11,7 @@ export function ThemeSelector() {
     <Button
       type="button"
       variant="ghost"
-      size="icon"
+      size="icon-sm"
       data-testid="theme-selector"
       disabled={!preferencesReady}
       aria-label={label}

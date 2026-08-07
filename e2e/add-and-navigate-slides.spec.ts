@@ -10,6 +10,17 @@ declare global {
 }
 
 test.describe('add and navigate independent slides', () => {
+  test('collapses and reopens the slide sidebar', async ({ page }) => {
+    await openEditor(page)
+
+    await expect(page.getByRole('complementary', { name: 'Slides' })).toBeVisible()
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.getByRole('complementary', { name: 'Slides' })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Open sidebar' }).click()
+    await expect(page.getByRole('complementary', { name: 'Slides' })).toBeVisible()
+  })
+
   test('shows numbered sidebar rows and inserts a blank slide after the active slide', async ({
     page,
   }) => {
