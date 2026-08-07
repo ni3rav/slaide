@@ -83,6 +83,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { useTheme } from "./ThemeProvider.tsx";
 import { ThemeSelector } from "./ThemeSelector.tsx";
 
@@ -815,43 +816,61 @@ export function EditorPage() {
       ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-            title={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen((open) => !open)}
-          >
-            {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-            <span className="sr-only">
-              {sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-            </span>
-          </Button>
-          <Button type="button" variant="ghost" size="icon-sm" asChild>
-            <Link
-              to="/"
-              aria-label="Home"
-              title="Home"
-              onClick={(event) => void handleHomeClick(event)}
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+              title={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen((open) => !open)}
             >
-              <Home />
-              <span className="sr-only">Home</span>
-            </Link>
-          </Button>
+              {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+              <span className="sr-only">
+                {sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+              </span>
+            </Button>
+            <Button type="button" variant="ghost" size="icon-sm" asChild>
+              <Link
+                to="/"
+                aria-label="Home"
+                title="Home"
+                onClick={(event) => void handleHomeClick(event)}
+              >
+                <Home />
+                <span className="sr-only">Home</span>
+              </Link>
+            </Button>
+          </div>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <h1 className="m-0 truncate text-sm font-semibold leading-tight">
-                {state.deck.title}
-              </h1>
-              {isReadOnly ? null : (
+          <Separator
+            orientation="vertical"
+            className="data-vertical:h-4 data-vertical:self-center"
+          />
+
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="m-0 min-w-0 truncate text-sm font-semibold leading-none tracking-tight">
+              {state.deck.title}
+            </h1>
+            <span
+              className="h-1 w-1 shrink-0 rounded-full bg-border"
+              aria-hidden="true"
+            />
+            <p className="m-0 shrink-0 text-xs text-muted-foreground">
+              Slide {activeSlideIndex + 1} of {state.slides.length}
+            </p>
+            {isReadOnly ? null : (
+              <>
+                <span
+                  className="h-1 w-1 shrink-0 rounded-full bg-border"
+                  aria-hidden="true"
+                />
                 <p
                   role="status"
                   aria-live="polite"
-                  className={`m-0 shrink-0 text-[11px] leading-none ${
+                  className={`m-0 shrink-0 text-xs tabular-nums ${
                     saveStatus === "failed"
                       ? "font-medium text-destructive"
                       : "text-muted-foreground"
@@ -860,15 +879,14 @@ export function EditorPage() {
                 >
                   {formatSaveStatus(saveStatus)}
                 </p>
-              )}
-            </div>
-            <p className="m-0 truncate text-xs text-muted-foreground">
-              Slide {activeSlideIndex + 1} of {state.slides.length}
-            </p>
+              </>
+            )}
           </div>
+
           <div className="flex shrink-0 items-center gap-1">
             <Button
               type="button"
+              variant="ghost"
               size="sm"
               className="gap-1.5"
               onClick={() => handlePresentClick()}
@@ -879,15 +897,16 @@ export function EditorPage() {
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="sm"
+              className="gap-1.5"
               aria-label="Export deck"
               title="Export deck"
               onClick={() => void handleExport()}
             >
               <Download />
-              <span className="sr-only">Export deck</span>
+              Export
             </Button>
-            <ThemeSelector />
+            <ThemeSelector labeled />
           </div>
         </header>
 
