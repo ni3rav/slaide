@@ -37,6 +37,12 @@ export type CreatedDeck = {
   slides: Slide[]
 }
 
+export type InsertedSlide = {
+  deck: Deck
+  slide: Slide
+  slides: Slide[]
+}
+
 export type LoadDeckResult =
   | { status: 'ok'; deck: Deck; slides: Slide[] }
   | { status: 'missing' }
@@ -56,6 +62,7 @@ export type DeckRepository = {
   renameDeck: (deckId: DeckId, title: string) => Promise<Deck>
   deleteDeck: (deckId: DeckId) => Promise<void>
   saveScene: (slideId: SlideId, scene: Scene) => Promise<Slide>
+  insertSlideAfter: (deckId: DeckId, afterSlideId: SlideId) => Promise<InsertedSlide>
   dispose: () => Promise<void>
 }
 
@@ -221,6 +228,58 @@ export async function createDeckRepository(
       })
 
       return updatedSlide
+    },
+
+    async insertSlideAfter(deckId, afterSlideId) {
+      const deck = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!deck || !isValidDeck(deck)) {
+        throw new Error('Deck not found')
+      }
+
+      const afterIndex = deck.slideOrder.indexOf(afterSlideId)
+      if (afterIndex === -1) {
+        throw new Error('Slide not found in deck')
+      }
+
+      const slideId = crypto.randomUUID()
+      const now = Date.now()
+      const slide: Slide = {
+        id: slideId,
+        schemaVersion: RECORD_SCHEMA_VERSION,
+        deckId,
+        scene: blankScene(),
+        createdAt: now,
+        updatedAt: now,
+      }
+      const updatedDeck: Deck = {
+        ...deck,
+        slideOrder: [
+          ...deck.slideOrder.slice(0, afterIndex + 1),
+          slideId,
+          ...deck.slideOrder.slice(afterIndex + 1),
+        ],
+        updatedAt: now,
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to insert slide'))
+        tx.onabort = () => reject(tx.error ?? new Error('Slide insertion aborted'))
+        tx.objectStore(DECKS_STORE).put(updatedDeck)
+        tx.objectStore(SLIDES_STORE).put(slide)
+      })
+
+      const slides: Slide[] = []
+      for (const id of updatedDeck.slideOrder) {
+        const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+        if (!stored || !isValidSlide(stored, deckId)) {
+          throw new Error('Inserted slide could not be loaded')
+        }
+        slides.push(stored)
+      }
+
+      return { deck: updatedDeck, slide, slides }
     },
 
     async dispose() {

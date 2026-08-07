@@ -4,15 +4,19 @@
 
 **Blocked by:** 03 — Draw and autosave one Scene
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The sidebar shows one numbered row for every Slide in Slide order.
-- [ ] The Add slide action inserts one blank Slide immediately after the Active slide.
-- [ ] The new Slide becomes active.
-- [ ] Clicking a Slide row force-saves the current Scene before navigation.
-- [ ] Navigation unmounts the current Excalidraw instance and mounts the target Scene in a new instance.
-- [ ] At most one Excalidraw instance is live at every point in the workflow.
-- [ ] Returning to a Slide restores its Scene and fits its frame.
-- [ ] Undo and redo history may reset after Slide navigation.
-- [ ] Slide creation and Slide order updates are transactional.
-- [ ] Browser and repository tests cover insertion positions, independent content, forced saves, reloads, and the single-instance invariant.
+- [x] The sidebar shows one numbered row for every Slide in Slide order.
+- [x] The Add slide action inserts one blank Slide immediately after the Active slide.
+- [x] The new Slide becomes active.
+- [x] Clicking a Slide row force-saves the current Scene before navigation.
+- [x] Navigation unmounts the current Excalidraw instance and mounts the target Scene in a new instance.
+- [x] At most one Excalidraw instance is live at every point in the workflow.
+- [x] Returning to a Slide restores its Scene and fits its frame.
+- [x] Undo and redo history may reset after Slide navigation.
+- [x] Slide creation and Slide order updates are transactional.
+- [x] Browser and repository tests cover insertion positions, independent content, forced saves, reloads, and the single-instance invariant.
+
+## Answer
+
+Added transactional `insertSlideAfter` on the deck repository and a sidebar with numbered slide rows plus an Add slide action. Slide navigation force-flushes autosave, reloads the target scene from storage, and remounts Excalidraw with `key={activeSlide.id}` so only one instance is live. New slides insert after the active slide and become active. `fitSlideFrame` best-effort fits the 1920×1080 frame on mount via `zoomToFitBounds`. Covered by five repository tests and five Playwright tests (insertion positions, independent scenes, forced saves, reload recovery, single-instance invariant).

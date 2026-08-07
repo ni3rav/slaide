@@ -184,6 +184,86 @@ describe('DeckRepository', () => {
     ).rejects.toThrow('Slide not found')
   })
 
+  it('inserts a blank slide immediately after the active slide', async () => {
+    const created = await repository.createDeck()
+    const firstSlideId = created.deck.slideOrder[0]!
+
+    const inserted = await repository.insertSlideAfter(created.deck.id, firstSlideId)
+
+    expect(inserted.slide.scene).toEqual({
+      elements: [],
+      appState: {},
+      files: {},
+    })
+    expect(inserted.deck.slideOrder).toEqual([firstSlideId, inserted.slide.id])
+    expect(inserted.slides).toHaveLength(2)
+    expect(inserted.slides[0]?.id).toBe(firstSlideId)
+    expect(inserted.slides[1]?.id).toBe(inserted.slide.id)
+    expect(inserted.deck.updatedAt).toBeGreaterThanOrEqual(created.deck.updatedAt)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck.slideOrder).toEqual(inserted.deck.slideOrder)
+    expect(loaded.slides).toHaveLength(2)
+  })
+
+  it('inserts slides at the requested positions in slide order', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+
+    const afterAAgain = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideC = afterAAgain.slide.id
+
+    expect(afterAAgain.deck.slideOrder).toEqual([slideA, slideC, slideB])
+  })
+
+  it('rejects insertSlideAfter when the deck is missing', async () => {
+    await expect(
+      repository.insertSlideAfter(crypto.randomUUID(), crypto.randomUUID()),
+    ).rejects.toThrow('Deck not found')
+  })
+
+  it('rejects insertSlideAfter when the after slide is not in slide order', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.insertSlideAfter(created.deck.id, crypto.randomUUID()),
+    ).rejects.toThrow('Slide not found in deck')
+  })
+
+  it('leaves deck and slides unchanged when insert transaction aborts', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.deck.slideOrder[0]!
+    const originalPut = IDBObjectStore.prototype.put
+
+    IDBObjectStore.prototype.put = function patchedPut(value, key) {
+      const request = originalPut.call(this, value, key)
+      if (this.name === 'slides') {
+        IDBObjectStore.prototype.put = originalPut
+        this.transaction.abort()
+      }
+      return request
+    }
+
+    try {
+      await expect(
+        repository.insertSlideAfter(created.deck.id, slideId),
+      ).rejects.toThrow()
+    } finally {
+      IDBObjectStore.prototype.put = originalPut
+    }
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck).toEqual(created.deck)
+    expect(loaded.slides).toEqual(created.slides)
+  })
+
   it('leaves deck and slides unchanged when delete transaction aborts', async () => {
     const created = await repository.createDeck()
     const originalDelete = IDBObjectStore.prototype.delete
