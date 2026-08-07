@@ -1,5 +1,28 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, Fragment } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  PointerSensor,
+  closestCenter,
+  pointerWithin,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   Excalidraw,
   MainMenu,
@@ -8,6 +31,7 @@ import {
 } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
+import { GripVertical } from 'lucide-react'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { Deck, Slide } from '../storage/deck-repository.ts'
 import {
@@ -28,6 +52,7 @@ import {
   toElementsMap,
 } from '../slide/slide-element-bounds.ts'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
+import { planSlideInsertion } from '../slide/slide-reorder.ts'
 import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -87,6 +112,9 @@ export function EditorPage() {
   const [leaveWarning, setLeaveWarning] = useState(false)
   const [checkedSlideIds, setCheckedSlideIds] = useState<Set<string>>(() => new Set())
   const [exportError, setExportError] = useState(false)
+  const [activeDragSlideId, setActiveDragSlideId] = useState<string | null>(null)
+  const [insertionIndex, setInsertionIndex] = useState<number | null>(null)
+  const insertionIndexRef = useRef<number | null>(null)
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(null)
   const releaseLockRef = useRef<(() => void) | null>(null)
   const editSessionIdRef = useRef<number | null>(null)
@@ -326,6 +354,71 @@ export function EditorPage() {
     })
   }
 
+  const slideSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  function handleSlideDragStart(event: DragStartEvent) {
+    setActiveDragSlideId(String(event.active.id))
+  }
+
+  function handleSlideDragOver(event: DragOverEvent) {
+    if (state.status !== 'ok') return
+    const nextInsertion =
+      insertionIndexFromDragOver(event, state.deck.slideOrder) ?? null
+    insertionIndexRef.current = nextInsertion
+    setInsertionIndex(nextInsertion)
+  }
+
+  async function commitSlideReorder(slideId: string, insertionIndex: number) {
+    if (state.status !== 'ok' || !deckId || state.editMode !== 'editable') return
+
+    const plan = planSlideInsertion(
+      state.deck.slideOrder,
+      slideId,
+      insertionIndex,
+    )
+    if (!plan.changed) return
+
+    const reordered = await repository.reorderSlide(
+      deckId,
+      slideId,
+      insertionIndex,
+    )
+    setState({
+      status: 'ok',
+      deck: reordered.deck,
+      slides: reordered.slides,
+      activeSlide:
+        reordered.slides.find((slide) => slide.id === state.activeSlide.id) ??
+        state.activeSlide,
+      editMode: state.editMode,
+    })
+  }
+
+  async function handleSlideDragEnd(event: DragEndEvent) {
+    const trackedInsertion = insertionIndexRef.current
+    setActiveDragSlideId(null)
+    setInsertionIndex(null)
+    insertionIndexRef.current = null
+    if (state.status !== 'ok' || !deckId || state.editMode !== 'editable') return
+
+    const slideId = String(event.active.id)
+    const targetInsertion =
+      insertionIndexFromDragOver(event, state.deck.slideOrder) ?? trackedInsertion
+    if (targetInsertion == null) return
+
+    await commitSlideReorder(slideId, targetInsertion)
+  }
+
+  function handleSlideDragCancel() {
+    setActiveDragSlideId(null)
+    setInsertionIndex(null)
+    insertionIndexRef.current = null
+  }
+
   async function handleHomeClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
     setLeaveWarning(false)
@@ -414,33 +507,68 @@ export function EditorPage() {
             Delete
           </Button>
         ) : null}
-        <ol className="m-0 flex list-none flex-col gap-1 p-0">
-          {state.slides.map((slide, index) => (
-            <li key={slide.id} className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                className="size-4 shrink-0 accent-primary"
-                checked={checkedSlideIds.has(slide.id)}
-                disabled={isReadOnly}
-                aria-label={`Select slide ${index + 1}`}
-                onChange={() => toggleSlideChecked(slide.id)}
-                onClick={(event) => event.stopPropagation()}
+        <DndContext
+          sensors={slideSensors}
+          collisionDetection={slideListCollisionDetection}
+          onDragStart={handleSlideDragStart}
+          onDragOver={handleSlideDragOver}
+          onDragEnd={(event) => void handleSlideDragEnd(event)}
+          onDragCancel={handleSlideDragCancel}
+        >
+          <SortableContext
+            items={state.slides.map((slide) => slide.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ol className="m-0 flex list-none flex-col gap-1 p-0">
+              {state.slides.map((slide, index) => (
+                <Fragment key={slide.id}>
+                  <SlideInsertionIndicator
+                    index={index}
+                    active={insertionIndex === index}
+                  />
+                  <SortableSlideRow
+                    slide={slide}
+                    index={index}
+                    isActive={slide.id === state.activeSlide.id}
+                    isChecked={checkedSlideIds.has(slide.id)}
+                    isReadOnly={isReadOnly}
+                    isDragging={activeDragSlideId === slide.id}
+                    slideCount={state.slides.length}
+                    onSelect={() => void handleSelectSlide(slide.id)}
+                    onToggleChecked={() => toggleSlideChecked(slide.id)}
+                    onKeyboardReorder={(insertionIndex) =>
+                      void commitSlideReorder(slide.id, insertionIndex)
+                    }
+                  />
+                </Fragment>
+              ))}
+              <SlideInsertionIndicator
+                index={state.slides.length}
+                active={insertionIndex === state.slides.length}
               />
-              <Button
-                type="button"
-                variant={slide.id === state.activeSlide.id ? 'secondary' : 'ghost'}
-                size="sm"
-                className="min-w-0 flex-1"
-                aria-current={
-                  slide.id === state.activeSlide.id ? 'true' : undefined
-                }
-                onClick={() => void handleSelectSlide(slide.id)}
-              >
-                {index + 1}
-              </Button>
-            </li>
-          ))}
-        </ol>
+            </ol>
+          </SortableContext>
+          <DragOverlay dropAnimation={null}>
+            {activeDragSlideId
+              ? (() => {
+                  const draggedSlide = state.slides.find(
+                    (slide) => slide.id === activeDragSlideId,
+                  )
+                  const draggedIndex = state.slides.findIndex(
+                    (slide) => slide.id === activeDragSlideId,
+                  )
+                  if (!draggedSlide) return null
+                  return (
+                    <SlideRowPreview
+                      index={draggedIndex}
+                      isActive={draggedSlide.id === state.activeSlide.id}
+                      isChecked={checkedSlideIds.has(draggedSlide.id)}
+                    />
+                  )
+                })()
+              : null}
+          </DragOverlay>
+        </DndContext>
       </aside>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border bg-muted/30 px-4 py-3">
@@ -702,4 +830,197 @@ function formatSaveStatus(status: SaveStatus): string {
     case 'saved':
       return 'Saved'
   }
+}
+
+type SortableSlideRowProps = {
+  slide: Slide
+  index: number
+  isActive: boolean
+  isChecked: boolean
+  isReadOnly: boolean
+  isDragging: boolean
+  slideCount: number
+  onSelect: () => void
+  onToggleChecked: () => void
+  onKeyboardReorder: (insertionIndex: number) => void
+}
+
+function SortableSlideRow({
+  slide,
+  index,
+  isActive,
+  isChecked,
+  isReadOnly,
+  isDragging,
+  slideCount,
+  onSelect,
+  onToggleChecked,
+  onKeyboardReorder,
+}: SortableSlideRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: slide.id,
+    disabled: isReadOnly,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  }
+
+  return (
+    <li ref={setNodeRef} style={style} className="flex items-center gap-1">
+      <input
+        type="checkbox"
+        className="size-4 shrink-0 accent-primary"
+        checked={isChecked}
+        disabled={isReadOnly}
+        aria-label={`Select slide ${index + 1}`}
+        onChange={onToggleChecked}
+        onClick={(event) => event.stopPropagation()}
+      />
+      <Button
+        type="button"
+        variant={isActive ? 'secondary' : 'ghost'}
+        size="sm"
+        className="min-w-0 flex-1"
+        aria-current={isActive ? 'true' : undefined}
+        onClick={onSelect}
+      >
+        {index + 1}
+      </Button>
+      <button
+        type="button"
+        ref={setActivatorNodeRef}
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+        aria-label={`Reorder slide ${index + 1}`}
+        disabled={isReadOnly}
+        onClick={(event) => event.preventDefault()}
+        {...attributes}
+        {...listeners}
+        onKeyDown={(event) => {
+          if (listeners?.onKeyDown) {
+            listeners.onKeyDown(event)
+          }
+          if (event.defaultPrevented || isDragging) return
+
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            onKeyboardReorder(Math.min(index + 2, slideCount))
+          } else if (event.key === 'ArrowUp' && index > 0) {
+            event.preventDefault()
+            onKeyboardReorder(index)
+          }
+        }}
+      >
+        <GripVertical className="size-4" aria-hidden="true" />
+      </button>
+    </li>
+  )
+}
+
+function SlideRowPreview({
+  index,
+  isActive,
+  isChecked,
+}: {
+  index: number
+  isActive: boolean
+  isChecked: boolean
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1 py-0.5 shadow-sm">
+      <input
+        type="checkbox"
+        className="size-4 shrink-0 accent-primary"
+        checked={isChecked}
+        readOnly
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <span
+        className={`inline-flex h-8 min-w-8 flex-1 items-center justify-center rounded-md text-sm ${
+          isActive ? 'bg-secondary' : ''
+        }`}
+      >
+        {index + 1}
+      </span>
+      <span className="inline-flex size-7 items-center justify-center text-muted-foreground">
+        <GripVertical className="size-4" aria-hidden="true" />
+      </span>
+    </div>
+  )
+}
+
+function SlideInsertionIndicator({
+  index,
+  active,
+}: {
+  index: number
+  active: boolean
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `insertion-${index}`,
+    data: { type: 'insertion', index },
+  })
+
+  const showIndicator = active || isOver
+
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid={`slide-insertion-${index}`}
+      className="relative -my-1 h-3"
+      aria-hidden="true"
+    >
+      <div
+        className={`absolute inset-x-1 top-1/2 -translate-y-1/2 rounded-full transition-all ${
+          showIndicator ? 'h-0.5 bg-primary' : 'h-px bg-transparent'
+        }`}
+      />
+    </div>
+  )
+}
+
+const slideListCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args)
+  const insertionCollision = pointerCollisions.find((collision) =>
+    String(collision.id).startsWith('insertion-'),
+  )
+  if (insertionCollision) {
+    return [insertionCollision]
+  }
+  return closestCenter(args)
+}
+
+function insertionIndexFromDragOver(
+  event: DragOverEvent | DragEndEvent,
+  slideOrder: readonly string[],
+): number | null {
+  const { active, over } = event
+  if (!over) return null
+
+  if (typeof over.id === 'string' && over.id.startsWith('insertion-')) {
+    return Number.parseInt(over.id.slice('insertion-'.length), 10)
+  }
+
+  const activeIndex = slideOrder.indexOf(String(active.id))
+  const overIndex = slideOrder.indexOf(String(over.id))
+  if (overIndex === -1 || activeIndex === -1) return null
+
+  const overRect = over.rect
+  const activeTranslated = active.rect.current.translated
+  if (!activeTranslated) {
+    return activeIndex < overIndex ? overIndex + 1 : overIndex
+  }
+
+  const overMiddle = overRect.top + overRect.height / 2
+  return activeTranslated.top > overMiddle ? overIndex + 1 : overIndex
 }

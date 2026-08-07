@@ -408,6 +408,84 @@ describe('DeckRepository', () => {
       repository.deleteSlides(created.deck.id, created.slides[0]!.id, [crypto.randomUUID()]),
     ).rejects.toThrow('Slide not found in deck')
   })
+
+  it('reorders one slide by insertion index and updates deck last-modified time', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+    const afterB = await repository.insertSlideAfter(created.deck.id, slideB)
+    const slideC = afterB.slide.id
+
+    const reordered = await repository.reorderSlide(created.deck.id, slideA, 3)
+
+    expect(reordered.deck.slideOrder).toEqual([slideB, slideC, slideA])
+    expect(reordered.deck.updatedAt).toBeGreaterThanOrEqual(created.deck.updatedAt)
+    expect(reordered.slides.map((slide) => slide.id)).toEqual(reordered.deck.slideOrder)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck.slideOrder).toEqual([slideB, slideC, slideA])
+  })
+
+  it('is a no-op when the insertion point keeps the slide in place', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const before = await repository.loadDeck(created.deck.id)
+    expect(before.status).toBe('ok')
+    if (before.status !== 'ok') return
+
+    const reordered = await repository.reorderSlide(created.deck.id, slideA, 1)
+
+    expect(reordered.deck.slideOrder).toEqual([slideA, afterA.slide.id])
+    expect(reordered.deck.updatedAt).toBe(before.deck.updatedAt)
+  })
+
+  it('rejects reorderSlide when the deck is missing', async () => {
+    await expect(
+      repository.reorderSlide(crypto.randomUUID(), crypto.randomUUID(), 0),
+    ).rejects.toThrow('Deck not found')
+  })
+
+  it('rejects reorderSlide when the slide is not in slide order', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.reorderSlide(created.deck.id, crypto.randomUUID(), 0),
+    ).rejects.toThrow('Slide not found in deck')
+  })
+
+  it('leaves deck unchanged when reorder transaction aborts', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+    const originalPut = IDBObjectStore.prototype.put
+
+    IDBObjectStore.prototype.put = function patchedPut(value, key) {
+      const request = originalPut.call(this, value, key)
+      if (this.name === 'decks') {
+        IDBObjectStore.prototype.put = originalPut
+        this.transaction.abort()
+      }
+      return request
+    }
+
+    try {
+      await expect(
+        repository.reorderSlide(created.deck.id, slideA, 2),
+      ).rejects.toThrow()
+    } finally {
+      IDBObjectStore.prototype.put = originalPut
+    }
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck.slideOrder).toEqual([slideA, slideB])
+  })
 })
 
 async function patchDeckSlideOrder(

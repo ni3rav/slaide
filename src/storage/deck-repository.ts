@@ -1,4 +1,5 @@
 import { planSlideDeletion } from '../slide/slide-deletion.ts'
+import { planSlideInsertion } from '../slide/slide-reorder.ts'
 import {
   DECKS_STORE,
   getRecord,
@@ -50,6 +51,11 @@ export type DeletedSlides = {
   slides: Slide[]
 }
 
+export type ReorderedSlides = {
+  deck: Deck
+  slides: Slide[]
+}
+
 export type LoadDeckResult =
   | { status: 'ok'; deck: Deck; slides: Slide[] }
   | { status: 'missing' }
@@ -75,6 +81,11 @@ export type DeckRepository = {
     activeSlideId: SlideId,
     slideIdsToDelete: SlideId[],
   ) => Promise<DeletedSlides>
+  reorderSlide: (
+    deckId: DeckId,
+    slideId: SlideId,
+    insertionIndex: number,
+  ) => Promise<ReorderedSlides>
   dispose: () => Promise<void>
 }
 
@@ -375,6 +386,56 @@ export async function createDeckRepository(
       }
 
       return { deck: updatedDeck, activeSlide, slides }
+    },
+
+    async reorderSlide(deckId, slideId, insertionIndex) {
+      const deck = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!deck || !isValidDeck(deck)) {
+        throw new Error('Deck not found')
+      }
+
+      if (!deck.slideOrder.includes(slideId)) {
+        throw new Error('Slide not found in deck')
+      }
+
+      const plan = planSlideInsertion(deck.slideOrder, slideId, insertionIndex)
+      if (!plan.changed) {
+        const slides: Slide[] = []
+        for (const id of deck.slideOrder) {
+          const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+          if (!stored || !isValidSlide(stored, deckId)) {
+            throw new Error('Deck could not be loaded')
+          }
+          slides.push(stored)
+        }
+        return { deck, slides }
+      }
+
+      const now = Date.now()
+      const updatedDeck: Deck = {
+        ...deck,
+        slideOrder: plan.slideOrder,
+        updatedAt: now,
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(DECKS_STORE, 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to reorder slide'))
+        tx.onabort = () => reject(tx.error ?? new Error('Slide reorder aborted'))
+        tx.objectStore(DECKS_STORE).put(updatedDeck)
+      })
+
+      const slides: Slide[] = []
+      for (const id of updatedDeck.slideOrder) {
+        const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+        if (!stored || !isValidSlide(stored, deckId)) {
+          throw new Error('Deck could not be loaded after slide reorder')
+        }
+        slides.push(stored)
+      }
+
+      return { deck: updatedDeck, slides }
     },
 
     async dispose() {
