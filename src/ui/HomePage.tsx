@@ -19,7 +19,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
 import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
