@@ -1,0 +1,93 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100%;
+}
+
+#root > main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+#root > main.editor-page {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+dialog {
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  color: #292626;
+  max-width: min(32rem, calc(100vw - 2rem));
+}
+
+dialog::backdrop {
+  background: rgb(41 38 38 / 45%);
+}
+
+dialog h2 {
+  margin-top: 0;
+}
+
+dialog menu,
+dialog .dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.deck-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.deck-list > li {
+  display: grid;
+  gap: 0.5rem 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #bdbdbd;
+  margin-bottom: 0;
+}
+
+.deck-list > li > p,
+.deck-list > li > time {
+  margin: 0;
+  color: #4a4a4a;
+}
+
+.deck-list > li > time {
+  font-size: 0.9em;
+}
+
+.deck-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+/* Keep Excalidraw’s own controls; Eddy’s global button/input rules bleed otherwise. */
+.excalidraw button,
+.excalidraw .button,
+.excalidraw input,
+.excalidraw textarea,
+.excalidraw select {
+  all: revert;
+  font-family: inherit;
+}

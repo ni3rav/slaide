@@ -150,12 +150,14 @@ export function EditorPage() {
           <div role="alertdialog" aria-labelledby="leave-warning-title">
             <h2 id="leave-warning-title">Save failed</h2>
             <p>Your latest changes could not be saved. Leave anyway?</p>
-            <button type="button" onClick={() => setLeaveWarning(false)}>
-              Stay
-            </button>
-            <button type="button" onClick={() => navigate('/')}>
-              Leave without saving
-            </button>
+            <div className="dialog-actions">
+              <button type="button" onClick={() => setLeaveWarning(false)}>
+                Stay
+              </button>
+              <button type="button" onClick={() => navigate('/')}>
+                Leave without saving
+              </button>
+            </div>
           </div>
         ) : null}
       </header>

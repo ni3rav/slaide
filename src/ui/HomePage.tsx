@@ -80,15 +80,17 @@ export function HomePage() {
   return (
     <main>
       <h1>Slaide</h1>
-      <button type="button" onClick={() => void handleCreateDeck()} disabled={creating}>
-        New deck
-      </button>
+      <div className="home-actions">
+        <button type="button" onClick={() => void handleCreateDeck()} disabled={creating}>
+          New deck
+        </button>
+      </div>
       {decks === null ? (
         <p>Loading decks…</p>
       ) : decks.length === 0 ? (
         <p>No decks yet</p>
       ) : (
-        <ul>
+        <ul className="deck-list">
           {decks.map((deck) => (
             <li key={deck.id}>
               <Link to={`/decks/${deck.id}`}>{deck.title}</Link>
@@ -96,20 +98,22 @@ export function HomePage() {
               <time dateTime={new Date(deck.updatedAt).toISOString()}>
                 {formatModifiedTime(deck.updatedAt)}
               </time>
-              <button
-                type="button"
-                onClick={() =>
-                  setDialog({ type: 'rename', deck, title: deck.title })
-                }
-              >
-                Rename {deck.title}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialog({ type: 'delete', deck })}
-              >
-                Delete {deck.title}
-              </button>
+              <div className="deck-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDialog({ type: 'rename', deck, title: deck.title })
+                  }
+                >
+                  Rename {deck.title}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDialog({ type: 'delete', deck })}
+                >
+                  Delete {deck.title}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -134,12 +138,14 @@ export function HomePage() {
                 setDialog({ ...dialog, title: event.target.value })
               }
             />
-            <button type="button" onClick={() => setDialog({ type: 'none' })}>
-              Cancel
-            </button>
-            <button type="button" onClick={() => void handleRenameSave()} disabled={busy}>
-              Save
-            </button>
+            <div className="dialog-actions">
+              <button type="button" onClick={() => setDialog({ type: 'none' })}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => void handleRenameSave()} disabled={busy}>
+                Save
+              </button>
+            </div>
           </>
         ) : null}
         {dialog.type === 'delete' ? (
@@ -149,16 +155,18 @@ export function HomePage() {
               This permanently deletes {dialog.deck.title} and its{' '}
               {formatSlideCount(dialog.deck.slideCount)}.
             </p>
-            <button type="button" onClick={() => setDialog({ type: 'none' })}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteConfirm()}
-              disabled={busy}
-            >
-              Delete deck
-            </button>
+            <div className="dialog-actions">
+              <button type="button" onClick={() => setDialog({ type: 'none' })}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteConfirm()}
+                disabled={busy}
+              >
+                Delete deck
+              </button>
+            </div>
           </>
         ) : null}
       </dialog>
