@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createDeckRepository, type DeckRepository } from './deck-repository.ts'
+import { createDeckRepository, type Deck, type DeckRepository, type Slide } from './deck-repository.ts'
 
 describe('DeckRepository', () => {
   let databaseName: string
@@ -408,6 +408,89 @@ describe('DeckRepository', () => {
       repository.deleteSlides(created.deck.id, created.slides[0]!.id, [crypto.randomUUID()]),
     ).rejects.toThrow('Slide not found in deck')
   })
+
+  it('imports a remapped deck and slides in one transaction', async () => {
+    const existing = await repository.createDeck()
+    const importPayload = buildImportPayload('Imported deck')
+
+    const imported = await repository.importDeck(importPayload.deck, importPayload.slides)
+
+    expect(imported.deck.id).toBe(importPayload.deck.id)
+    expect(imported.slides).toHaveLength(1)
+    expect(await repository.listDecks()).toHaveLength(2)
+
+    const loaded = await repository.loadDeck(imported.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck).toEqual(imported.deck)
+    expect(loaded.slides).toEqual(imported.slides)
+
+    const original = await repository.loadDeck(existing.deck.id)
+    expect(original.status).toBe('ok')
+  })
+
+  it('rejects import when the deck id already exists', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.importDeck(created.deck, created.slides),
+    ).rejects.toThrow(/overwrite/i)
+  })
+
+  it('leaves storage unchanged when import transaction aborts', async () => {
+    const existing = await repository.createDeck()
+    const importPayload = buildImportPayload('Rollback deck')
+    const originalPut = IDBObjectStore.prototype.put
+
+    IDBObjectStore.prototype.put = function patchedPut(value, key) {
+      const request = originalPut.call(this, value, key)
+      if (this.name === 'slides') {
+        IDBObjectStore.prototype.put = originalPut
+        this.transaction.abort()
+      }
+      return request
+    }
+
+    try {
+      await expect(
+        repository.importDeck(importPayload.deck, importPayload.slides),
+      ).rejects.toThrow()
+    } finally {
+      IDBObjectStore.prototype.put = originalPut
+    }
+
+    expect(await repository.listDecks()).toHaveLength(1)
+    expect(await repository.loadDeck(importPayload.deck.id)).toEqual({ status: 'missing' })
+    expect(await repository.loadDeck(existing.deck.id)).toEqual({
+      status: 'ok',
+      deck: existing.deck,
+      slides: existing.slides,
+    })
+  })
+
+  it('reports a clear error when import fails due to storage quota', async () => {
+    const importPayload = buildImportPayload('Quota deck')
+    const originalPut = IDBObjectStore.prototype.put
+
+    IDBObjectStore.prototype.put = function patchedPut(value, key) {
+      if (this.name === 'slides') {
+        IDBObjectStore.prototype.put = originalPut
+        throw new DOMException('Quota exceeded', 'QuotaExceededError')
+      }
+      return originalPut.call(this, value, key)
+    }
+
+    try {
+      await expect(
+        repository.importDeck(importPayload.deck, importPayload.slides),
+      ).rejects.toThrow(/storage is full/i)
+    } finally {
+      IDBObjectStore.prototype.put = originalPut
+    }
+
+    expect(await repository.listDecks()).toEqual([])
+    expect(await repository.loadDeck(importPayload.deck.id)).toEqual({ status: 'missing' })
+  })
 })
 
 async function patchDeckSlideOrder(
@@ -522,4 +605,30 @@ async function deleteDatabase(databaseName: string): Promise<void> {
     request.onerror = () => reject(request.error ?? new Error('Failed to delete database'))
     request.onblocked = () => resolve()
   })
+}
+
+function buildImportPayload(title: string): { deck: Deck; slides: Slide[] } {
+  const deckId = crypto.randomUUID()
+  const slideId = crypto.randomUUID()
+  const now = Date.now()
+  return {
+    deck: {
+      id: deckId,
+      schemaVersion: 1,
+      title,
+      slideOrder: [slideId],
+      createdAt: now,
+      updatedAt: now,
+    },
+    slides: [
+      {
+        id: slideId,
+        schemaVersion: 1,
+        deckId,
+        scene: { elements: [], appState: {}, files: {} },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  }
 }

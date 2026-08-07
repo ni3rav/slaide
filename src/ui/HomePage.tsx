@@ -1,6 +1,7 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Download, Pencil, Trash2 } from 'lucide-react'
+import { Download, Pencil, Trash2, Upload } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -22,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
 import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
+import { importErrorMessage, prepareDeckImportFromFile } from '../slaide-file/import-deck.ts'
 import { ThemeSelector } from './ThemeSelector.tsx'
 
 type DialogState =
@@ -36,7 +38,10 @@ export function HomePage() {
   const [creating, setCreating] = useState(false)
   const [dialog, setDialog] = useState<DialogState>({ type: 'none' })
   const [busy, setBusy] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
   const titleInputId = useId()
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -93,6 +98,25 @@ export function HomePage() {
     exportDeckAsSlaideFile(loaded.deck, loaded.slides)
   }
 
+  async function handleImportFile(file: File) {
+    if (importing) return
+    setImporting(true)
+    setImportError(null)
+    try {
+      const existingTitles = (await repository.listDecks()).map((deck) => deck.title)
+      const prepared = await prepareDeckImportFromFile(file, existingTitles)
+      await repository.importDeck(prepared.deck, prepared.slides)
+      await refreshDecks()
+    } catch (error) {
+      setImportError(importErrorMessage(error))
+    } finally {
+      setImporting(false)
+      if (importInputRef.current) {
+        importInputRef.current.value = ''
+      }
+    }
+  }
+
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
@@ -107,14 +131,46 @@ export function HomePage() {
       <main className="mx-auto max-w-5xl px-6 py-8 pb-12">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">Your local decks</p>
-          <Button
-            type="button"
-            onClick={() => void handleCreateDeck()}
-            disabled={creating}
-          >
-            New deck
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".slaide,application/json"
+              className="sr-only"
+              data-testid="import-slaide-input"
+              aria-label="Import Slaide file"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) {
+                  void handleImportFile(file)
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+            >
+              <Upload />
+              Import deck
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleCreateDeck()}
+              disabled={creating}
+            >
+              New deck
+            </Button>
+          </div>
         </div>
+
+        {importError ? (
+          <Alert className="mb-6" role="alert" data-testid="import-error">
+            <AlertTitle>Import failed</AlertTitle>
+            <AlertDescription>{importError}</AlertDescription>
+          </Alert>
+        ) : null}
 
         {decks === null ? (
           <p className="text-muted-foreground">Loading decks…</p>
