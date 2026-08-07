@@ -28,6 +28,7 @@ import {
   toElementsMap,
 } from '../slide/slide-element-bounds.ts'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
+import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   AlertDialog,
@@ -84,6 +85,7 @@ export function EditorPage() {
   const [state, setState] = useState<EditorState>({ status: 'loading' })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [leaveWarning, setLeaveWarning] = useState(false)
+  const [exportError, setExportError] = useState(false)
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(null)
   const releaseLockRef = useRef<(() => void) | null>(null)
   const editSessionIdRef = useRef<number | null>(null)
@@ -304,6 +306,28 @@ export function EditorPage() {
     }
   }
 
+  async function handleExport() {
+    if (state.status !== 'ok' || !deckId) return
+    setExportError(false)
+
+    if (state.editMode === 'editable') {
+      try {
+        await autosaveRef.current?.flush()
+      } catch {
+        setExportError(true)
+        return
+      }
+    }
+
+    const loaded = await repository.loadDeck(deckId)
+    if (loaded.status !== 'ok') {
+      setState({ status: 'unavailable', reason: loaded.status })
+      return
+    }
+
+    exportDeckAsSlaideFile(loaded.deck, loaded.slides)
+  }
+
   if (state.status === 'loading') {
     return (
       <main className="p-6">
@@ -390,7 +414,24 @@ export function EditorPage() {
               {formatSaveStatus(saveStatus)}
             </p>
           )}
+          {exportError ? (
+            <Alert className="basis-full" role="alert" data-testid="export-error">
+              <AlertTitle>Export failed</AlertTitle>
+              <AlertDescription>
+                Your latest changes could not be saved. Fix the save error before
+                exporting.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleExport()}
+            >
+              Export deck
+            </Button>
             <ThemeSelector />
             <Link
               to="/"

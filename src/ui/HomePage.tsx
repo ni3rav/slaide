@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
+import { exportDeckAsSlaideFile } from '../slaide-file/export-deck.ts'
 import { ThemeSelector } from './ThemeSelector.tsx'
 
 type DialogState =
@@ -86,6 +87,12 @@ export function HomePage() {
     }
   }
 
+  async function handleExport(deck: DeckSummary) {
+    const loaded = await repository.loadDeck(deck.id)
+    if (loaded.status !== 'ok') return
+    exportDeckAsSlaideFile(loaded.deck, loaded.slides)
+  }
+
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
@@ -138,6 +145,14 @@ export function HomePage() {
                     </CardAction>
                   </CardHeader>
                   <CardFooter className="gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleExport(deck)}
+                    >
+                      Export {deck.title}
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
