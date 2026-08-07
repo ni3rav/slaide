@@ -62,12 +62,15 @@ export type DeckSummary = {
   updatedAt: number
 }
 
+export type ImportDeckResult = CreatedDeck
+
 export type DeckRepository = {
   createDeck: () => Promise<CreatedDeck>
   listDecks: () => Promise<DeckSummary[]>
   loadDeck: (deckId: DeckId) => Promise<LoadDeckResult>
   renameDeck: (deckId: DeckId, title: string) => Promise<Deck>
   deleteDeck: (deckId: DeckId) => Promise<void>
+  importDeck: (deck: Deck, slides: Slide[]) => Promise<ImportDeckResult>
   saveScene: (slideId: SlideId, scene: Scene) => Promise<Slide>
   insertSlideAfter: (deckId: DeckId, afterSlideId: SlideId) => Promise<InsertedSlide>
   deleteSlides: (
@@ -186,6 +189,49 @@ export async function createDeckRepository(
       })
 
       return updated
+    },
+
+    async importDeck(deck, slides) {
+      if (!isValidDeck(deck)) {
+        throw new Error('Invalid deck data for import')
+      }
+
+      if (slides.length !== deck.slideOrder.length) {
+        throw new Error('Imported slides do not match deck slide order')
+      }
+
+      const slidesById = new Map(slides.map((slide) => [slide.id, slide]))
+      for (const slideId of deck.slideOrder) {
+        const slide = slidesById.get(slideId)
+        if (!slide || !isValidSlide(slide, deck.id)) {
+          throw new Error('Invalid slide data for import')
+        }
+      }
+
+      const existingDeck = await getRecord<Deck>(db, DECKS_STORE, deck.id)
+      if (existingDeck) {
+        throw new Error('Import would overwrite an existing deck')
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(formatImportWriteError(tx.error))
+        tx.onabort = () => reject(formatImportWriteError(tx.error))
+        const decks = tx.objectStore(DECKS_STORE)
+        const slideStore = tx.objectStore(SLIDES_STORE)
+
+        try {
+          for (const slide of slides) {
+            slideStore.put(slide)
+          }
+          decks.put(deck)
+        } catch (error) {
+          reject(formatImportWriteError(error))
+        }
+      })
+
+      return { deck, slides }
     },
 
     async deleteDeck(deckId) {
@@ -381,6 +427,16 @@ export async function createDeckRepository(
       db.close()
     },
   }
+}
+
+function formatImportWriteError(error: unknown): Error {
+  if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+    return new Error('Import failed because browser storage is full')
+  }
+  if (error instanceof Error) {
+    return error
+  }
+  return new Error('Import failed')
 }
 
 function isValidDeck(value: unknown): value is Deck {

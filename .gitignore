@@ -16,6 +16,7 @@ playwright-report
 blob-report
 .vitest-attachments
 src/**/__screenshots__
+e2e/fixtures
 
 
 # Editor directories and files
