@@ -23,9 +23,9 @@ export function ViewportGate({ children }: ViewportGateProps) {
   }, [])
 
   return (
-    <div className="viewport-gate">
+    <div className="min-h-full">
       <div
-        className="viewport-gate__content"
+        className={supported ? 'min-h-full' : 'pointer-events-none min-h-full invisible'}
         aria-hidden={!supported}
         inert={supported ? undefined : true}
       >
@@ -33,13 +33,13 @@ export function ViewportGate({ children }: ViewportGateProps) {
       </div>
       {!supported ? (
         <div
-          className="viewport-blocker"
+          className="fixed inset-0 z-50 grid place-content-center bg-background p-8 text-center text-foreground"
           role="alert"
           aria-live="assertive"
           data-testid="viewport-blocker"
         >
-          <p>{VIEWPORT_BLOCKER_MESSAGE}</p>
-          <p className="viewport-blocker__hint">
+          <p className="mx-auto max-w-md text-base">{VIEWPORT_BLOCKER_MESSAGE}</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
             Supported width: {MIN_SUPPORTED_VIEWPORT_WIDTH}px or wider.
           </p>
         </div>

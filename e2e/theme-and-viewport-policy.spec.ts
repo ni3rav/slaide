@@ -17,12 +17,14 @@ test.describe('apply theme and desktop viewport policy', () => {
     await page.emulateMedia({ colorScheme: 'dark' })
     await page.goto('/')
 
-    await page.getByRole('radio', { name: 'Light' }).click()
+    await page.getByRole('button', { name: 'Switch to light theme' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
     await page.reload()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
-    await expect(page.getByRole('radio', { name: 'Light' })).toBeChecked()
+    await expect(
+      page.getByRole('button', { name: 'Switch to dark theme' }),
+    ).toBeVisible()
 
     const storedTheme = await readStoredThemePreference(page)
     expect(storedTheme).toBe('light')
@@ -34,11 +36,11 @@ test.describe('apply theme and desktop viewport policy', () => {
     await expect(page.getByTestId('excalidraw-host')).toBeVisible()
     await expect(page.getByTestId('theme-selector')).toBeEnabled()
 
-    await page.getByRole('radio', { name: 'Dark' }).click()
+    await page.getByRole('button', { name: 'Switch to dark theme' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(page.locator('.excalidraw.theme--dark')).toBeVisible()
 
-    await page.getByRole('radio', { name: 'Light' }).click()
+    await page.getByRole('button', { name: 'Switch to light theme' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     await expect(page.locator('.excalidraw.theme--dark')).toHaveCount(0)
   })

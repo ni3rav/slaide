@@ -28,9 +28,20 @@ import {
   toElementsMap,
 } from '../slide/slide-element-bounds.ts'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import { useTheme } from './ThemeProvider.tsx'
 import { ThemeSelector } from './ThemeSelector.tsx'
-import './editor.css'
 
 type EditorState =
   | { status: 'loading' }
@@ -81,6 +92,14 @@ export function EditorPage() {
   const slideConstraintsRef = useRef<ReturnType<
     typeof createSlideConstraintController
   > | null>(null)
+  const themeFromAppRef = useRef(theme)
+  const suppressExcalidrawThemeSyncRef = useRef(false)
+
+  useEffect(() => {
+    themeFromAppRef.current = theme
+    // Ignore Excalidraw theme echoes until it reports the app-driven theme.
+    suppressExcalidrawThemeSyncRef.current = true
+  }, [theme])
 
   useEffect(() => {
     if (!deckId) {
@@ -287,18 +306,23 @@ export function EditorPage() {
 
   if (state.status === 'loading') {
     return (
-      <main>
-        <p>Loading deck…</p>
+      <main className="p-6">
+        <p className="text-muted-foreground">Loading deck…</p>
       </main>
     )
   }
 
   if (state.status === 'unavailable') {
     return (
-      <main>
-        <h1>Deck unavailable</h1>
-        <p>This deck could not be opened.</p>
-        <Link to="/">Return home</Link>
+      <main className="mx-auto max-w-lg space-y-4 p-6">
+        <h1 className="text-2xl font-semibold">Deck unavailable</h1>
+        <p className="text-muted-foreground">This deck could not be opened.</p>
+        <Link
+          to="/"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Return home
+        </Link>
       </main>
     )
   }
@@ -310,74 +334,93 @@ export function EditorPage() {
   const initialScene = state.activeSlide.scene
 
   return (
-    <main className="editor-page">
-      <aside className="editor-sidebar" aria-label="Slides">
-        <button
+    <main className="m-0 flex h-svh max-w-none flex-row p-0">
+      <aside
+        className="flex w-28 shrink-0 flex-col gap-2 border-r border-border bg-muted/40 p-3"
+        aria-label="Slides"
+      >
+        <Button
           type="button"
-          className="editor-add-slide"
+          className="w-full"
+          size="sm"
           disabled={isReadOnly}
           onClick={() => void handleAddSlide()}
         >
           Add slide
-        </button>
-        <ol className="editor-slide-list">
+        </Button>
+        <ol className="m-0 flex list-none flex-col gap-1 p-0">
           {state.slides.map((slide, index) => (
             <li key={slide.id}>
-              <button
+              <Button
                 type="button"
-                className="editor-slide-row"
+                variant={slide.id === state.activeSlide.id ? 'secondary' : 'ghost'}
+                size="sm"
+                className="w-full"
                 aria-current={
                   slide.id === state.activeSlide.id ? 'true' : undefined
                 }
                 onClick={() => void handleSelectSlide(slide.id)}
               >
                 {index + 1}
-              </button>
+              </Button>
             </li>
           ))}
         </ol>
       </aside>
-      <div className="editor-main">
-        <header className="editor-chrome">
-          <h1>{state.deck.title}</h1>
-          <ThemeSelector />
-          <p>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border bg-muted/30 px-4 py-3">
+          <h1 className="m-0 text-lg font-semibold">{state.deck.title}</h1>
+          <p className="m-0 text-sm text-muted-foreground">
             Slide {activeSlideIndex + 1} of {state.slides.length}
           </p>
           {isReadOnly ? (
-            <p
-              className="editor-readonly-notice"
+            <Alert
+              className="basis-full"
               role="status"
               data-testid="readonly-notice"
             >
-              This deck is open for editing in another tab or window. You can
-              view slides here until that session ends.
-            </p>
+              <AlertTitle>Read-only</AlertTitle>
+              <AlertDescription>
+                This deck is open for editing in another tab or window. You can
+                view slides here until that session ends.
+              </AlertDescription>
+            </Alert>
           ) : (
-            <p role="status" aria-live="polite">
+            <p role="status" aria-live="polite" className="m-0 text-sm">
               {formatSaveStatus(saveStatus)}
             </p>
           )}
-          <Link to="/" onClick={(event) => void handleHomeClick(event)}>
-            Home
-          </Link>
-          {leaveWarning ? (
-            <div role="alertdialog" aria-labelledby="leave-warning-title">
-              <h2 id="leave-warning-title">Save failed</h2>
-              <p>Your latest changes could not be saved. Leave anyway?</p>
-              <div className="dialog-actions">
-                <button type="button" onClick={() => setLeaveWarning(false)}>
-                  Stay
-                </button>
-                <button type="button" onClick={() => navigate('/')}>
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeSelector />
+            <Link
+              to="/"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+              onClick={(event) => void handleHomeClick(event)}
+            >
+              Home
+            </Link>
+          </div>
+          <AlertDialog open={leaveWarning} onOpenChange={setLeaveWarning}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Save failed</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your latest changes could not be saved. Leave anyway?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Stay</AlertDialogCancel>
+                <AlertDialogAction onClick={() => navigate('/')}>
                   Leave without saving
-                </button>
-              </div>
-            </div>
-          ) : null}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </header>
-        <div className="editor-canvas" data-testid="excalidraw-host">
-          <Excalidraw
+        <div
+          className="editor-canvas relative min-h-0 flex-1 bg-muted/20 [&_.excalidraw]:h-full"
+          data-testid="excalidraw-host"
+        >          <Excalidraw
             key={`${state.activeSlide.id}:${state.editMode}`}
             theme={theme}
             initialData={{
@@ -522,13 +565,13 @@ export function EditorPage() {
             onChange={(elements, appState, files) => {
               if (isReadOnly) return
               const nextTheme = appState.theme
-              if (
-                (nextTheme === 'light' || nextTheme === 'dark') &&
-                nextTheme !== theme
-              ) {
-                window.setTimeout(() => {
+              if (nextTheme === 'light' || nextTheme === 'dark') {
+                if (nextTheme === themeFromAppRef.current) {
+                  suppressExcalidrawThemeSyncRef.current = false
+                } else if (!suppressExcalidrawThemeSyncRef.current) {
+                  themeFromAppRef.current = nextTheme
                   void setThemePreference(nextTheme)
-                }, 0)
+                }
               }
               if (slideConstraintsRef.current?.isGestureActive()) {
                 return

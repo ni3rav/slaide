@@ -38,8 +38,8 @@ function RepositoryGate({ children }: { children: ReactNode }) {
 
   if (!repository) {
     return (
-      <main>
-        <p>Starting Slaide…</p>
+      <main className="p-6">
+        <p className="text-muted-foreground">Starting Slaide…</p>
       </main>
     )
   }

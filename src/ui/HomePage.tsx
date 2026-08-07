@@ -1,5 +1,24 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useDeckRepository } from '../storage/deck-repository-context.tsx'
 import type { DeckSummary } from '../storage/deck-repository.ts'
 import { ThemeSelector } from './ThemeSelector.tsx'
@@ -16,7 +35,6 @@ export function HomePage() {
   const [creating, setCreating] = useState(false)
   const [dialog, setDialog] = useState<DialogState>({ type: 'none' })
   const [busy, setBusy] = useState(false)
-  const dialogRef = useRef<HTMLDialogElement>(null)
   const titleInputId = useId()
 
   useEffect(() => {
@@ -28,16 +46,6 @@ export function HomePage() {
       cancelled = true
     }
   }, [repository])
-
-  useEffect(() => {
-    const element = dialogRef.current
-    if (!element) return
-    if (dialog.type === 'none') {
-      if (element.open) element.close()
-      return
-    }
-    if (!element.open) element.showModal()
-  }, [dialog])
 
   async function refreshDecks() {
     setDecks(await repository.listDecks())
@@ -79,100 +87,154 @@ export function HomePage() {
   }
 
   return (
-    <main>
-      <h1>Slaide</h1>
-      <ThemeSelector />
-      <div className="home-actions">
-        <button type="button" onClick={() => void handleCreateDeck()} disabled={creating}>
-          New deck
-        </button>
-      </div>
-      {decks === null ? (
-        <p>Loading decks…</p>
-      ) : decks.length === 0 ? (
-        <p>No decks yet</p>
-      ) : (
-        <ul className="deck-list">
-          {decks.map((deck) => (
-            <li key={deck.id}>
-              <Link to={`/decks/${deck.id}`}>{deck.title}</Link>
-              <p>{formatSlideCount(deck.slideCount)}</p>
-              <time dateTime={new Date(deck.updatedAt).toISOString()}>
-                {formatModifiedTime(deck.updatedAt)}
-              </time>
-              <div className="deck-actions">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDialog({ type: 'rename', deck, title: deck.title })
-                  }
-                >
-                  Rename {deck.title}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDialog({ type: 'delete', deck })}
-                >
-                  Delete {deck.title}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="min-h-full">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-6">
+          <h1 className="text-lg font-semibold tracking-tight">Slaide</h1>
+          <ThemeSelector />
+        </div>
+      </header>
 
-      <dialog
-        ref={dialogRef}
-        onClose={() => setDialog({ type: 'none' })}
-        onCancel={(event) => {
-          event.preventDefault()
-          setDialog({ type: 'none' })
-        }}
-      >
-        {dialog.type === 'rename' ? (
-          <>
-            <h2>Rename deck</h2>
-            <label htmlFor={titleInputId}>Deck title</label>
-            <input
-              id={titleInputId}
-              value={dialog.title}
-              onChange={(event) =>
-                setDialog({ ...dialog, title: event.target.value })
-              }
-            />
-            <div className="dialog-actions">
-              <button type="button" onClick={() => setDialog({ type: 'none' })}>
-                Cancel
-              </button>
-              <button type="button" onClick={() => void handleRenameSave()} disabled={busy}>
-                Save
-              </button>
-            </div>
-          </>
-        ) : null}
-        {dialog.type === 'delete' ? (
-          <>
-            <h2>Delete “{dialog.deck.title}”</h2>
-            <p>
-              This permanently deletes {dialog.deck.title} and its{' '}
-              {formatSlideCount(dialog.deck.slideCount)}.
-            </p>
-            <div className="dialog-actions">
-              <button type="button" onClick={() => setDialog({ type: 'none' })}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDeleteConfirm()}
-                disabled={busy}
-              >
-                Delete deck
-              </button>
-            </div>
-          </>
-        ) : null}
-      </dialog>
-    </main>
+      <main className="mx-auto max-w-5xl px-6 py-8 pb-12">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Your local decks</p>
+          <Button
+            type="button"
+            onClick={() => void handleCreateDeck()}
+            disabled={creating}
+          >
+            New deck
+          </Button>
+        </div>
+
+        {decks === null ? (
+          <p className="text-muted-foreground">Loading decks…</p>
+        ) : decks.length === 0 ? (
+          <p className="text-muted-foreground">No decks yet</p>
+        ) : (
+          <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
+            {decks.map((deck) => (
+              <li key={deck.id} className="min-w-0">
+                <Card size="sm" className="h-full">
+                  <CardHeader>
+                    <CardTitle>
+                      <Link
+                        to={`/decks/${deck.id}`}
+                        className="text-foreground underline-offset-4 hover:underline"
+                      >
+                        {deck.title}
+                      </Link>
+                    </CardTitle>
+                    <CardDescription>
+                      {formatSlideCount(deck.slideCount)}
+                    </CardDescription>
+                    <CardAction>
+                      <time
+                        className="text-xs text-muted-foreground"
+                        dateTime={new Date(deck.updatedAt).toISOString()}
+                      >
+                        {formatModifiedTime(deck.updatedAt)}
+                      </time>
+                    </CardAction>
+                  </CardHeader>
+                  <CardFooter className="gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setDialog({ type: 'rename', deck, title: deck.title })
+                      }
+                    >
+                      Rename {deck.title}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDialog({ type: 'delete', deck })}
+                    >
+                      Delete {deck.title}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <Dialog
+          open={dialog.type !== 'none'}
+          onOpenChange={(open) => {
+            if (!open) setDialog({ type: 'none' })
+          }}
+        >
+          <DialogContent>
+            {dialog.type === 'rename' ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Rename deck</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-2">
+                  <Label htmlFor={titleInputId}>Deck title</Label>
+                  <Input
+                    id={titleInputId}
+                    value={dialog.title}
+                    onChange={(event) =>
+                      setDialog({ ...dialog, title: event.target.value })
+                    }
+                  />
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialog({ type: 'none' })}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleRenameSave()}
+                    disabled={busy}
+                  >
+                    Save
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : null}
+            {dialog.type === 'delete' ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Delete “{dialog.deck.title}”</DialogTitle>
+                  <DialogDescription>
+                    This permanently deletes {dialog.deck.title} and its{' '}
+                    {formatSlideCount(dialog.deck.slideCount)}.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialog({ type: 'none' })}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => void handleDeleteConfirm()}
+                    disabled={busy}
+                  >
+                    Delete deck
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+      </main>
+    </div>
   )
 }
 
