@@ -8,7 +8,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['src/**/*.test.ts'],
-          exclude: ['src/**/*.repository.test.ts'],
+          exclude: ['src/**/*.repository.test.ts', 'src/**/*.browser.test.ts'],
           environment: 'node',
         },
       },
@@ -16,6 +16,18 @@ export default defineConfig({
         test: {
           name: 'repository',
           include: ['src/**/*.repository.test.ts'],
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            headless: true,
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      },
+      {
+        test: {
+          name: 'browser',
+          include: ['src/**/*.browser.test.ts'],
           browser: {
             enabled: true,
             provider: playwright(),

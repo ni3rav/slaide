@@ -4,6 +4,7 @@ import {
   Excalidraw,
   MainMenu,
   convertToExcalidrawElements,
+  newElementWith,
 } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
@@ -14,12 +15,19 @@ import {
   openDeckEditSession,
   waitForDeckEditLock,
 } from '../storage/deck-edit-session.ts'
-import { fitSlideFrame } from '../scene/fit-slide-frame.ts'
 import { toPersistentScene } from '../scene/persistent-scene.ts'
 import {
   createSceneAutosave,
   type SaveStatus,
 } from '../scene/scene-autosave.ts'
+import { createSlideConstraintController } from '../slide/slide-constraints.ts'
+import {
+  allElementsInsideSlide,
+  constrainAllElements,
+  constrainElementsAfterGesture,
+  toElementsMap,
+} from '../slide/slide-element-bounds.ts'
+import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
 import { useTheme } from './ThemeProvider.tsx'
 import { ThemeSelector } from './ThemeSelector.tsx'
 import './editor.css'
@@ -37,8 +45,18 @@ type EditorState =
 
 type SlaideTestApi = {
   addRectangle: () => void
+  addOversizedRectangle: () => void
+  moveRectangleOffSlide: () => void
   getElementCount: () => number
   getSceneElementCount: () => number
+  getCamera: () => { scrollX: number; scrollY: number; zoom: number }
+  getViewport: () => { width: number; height: number }
+  setCamera: (camera: {
+    scrollX?: number
+    scrollY?: number
+    zoom?: number
+  }) => void
+  getStoredElementsInsideSlide: () => boolean
 }
 
 declare global {
@@ -60,6 +78,9 @@ export function EditorPage() {
   const editSessionIdRef = useRef<number | null>(null)
   const takeoverCancelledRef = useRef(false)
   const excalidrawApiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  const slideConstraintsRef = useRef<ReturnType<
+    typeof createSlideConstraintController
+  > | null>(null)
 
   useEffect(() => {
     if (!deckId) {
@@ -191,6 +212,8 @@ export function EditorPage() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       autosaveRef.current = null
+      slideConstraintsRef.current?.dispose()
+      slideConstraintsRef.current = null
       excalidrawApiRef.current = null
       delete window.__slaideTest
       void autosave
@@ -390,11 +413,26 @@ export function EditorPage() {
             }}
             excalidrawAPI={(api) => {
               if (isReadOnly) {
+                slideConstraintsRef.current?.dispose()
+                slideConstraintsRef.current = null
                 delete window.__slaideTest
                 return
               }
               excalidrawApiRef.current = api
-              fitSlideFrame(api)
+              slideConstraintsRef.current?.dispose()
+              slideConstraintsRef.current = createSlideConstraintController(
+                api,
+                () => {
+                  const { width, height } = api.getAppState()
+                  if (width <= 0 || height <= 0) {
+                    return null
+                  }
+                  return { width, height }
+                },
+              )
+              requestAnimationFrame(() => {
+                slideConstraintsRef.current?.fitSlideToViewport()
+              })
               window.__slaideTest = {
                 addRectangle() {
                   const created = convertToExcalidrawElements([
@@ -410,14 +448,77 @@ export function EditorPage() {
                     elements: [...api.getSceneElements(), ...created],
                   })
                 },
+                moveRectangleOffSlide() {
+                  const elements = api.getSceneElements()
+                  const rectangle = elements.find(
+                    (element) => element.type === 'rectangle',
+                  )
+                  if (!rectangle) {
+                    throw new Error('rectangle missing')
+                  }
+                  const moved = newElementWith(rectangle, { x: 1800, y: 980 })
+                  api.updateScene({
+                    elements: elements.map((element) =>
+                      element.id === moved.id ? moved : element,
+                    ),
+                  })
+                  slideConstraintsRef.current?.enforceElementsForTest()
+                },
+                addOversizedRectangle() {
+                  const created = convertToExcalidrawElements([
+                    {
+                      type: 'rectangle',
+                      x: 0,
+                      y: 0,
+                      width: SLIDE_WIDTH * 2,
+                      height: SLIDE_HEIGHT * 2,
+                    },
+                  ])
+                  api.updateScene({
+                    elements: constrainAllElements([
+                      ...api.getSceneElements(),
+                      ...created,
+                    ]),
+                  })
+                },
                 getElementCount() {
                   return api.getSceneElements().length
                 },
                 getSceneElementCount() {
                   return api.getSceneElements().length
                 },
+                getCamera() {
+                  const { scrollX, scrollY, zoom } = api.getAppState()
+                  return { scrollX, scrollY, zoom: zoom.value }
+                },
+                getViewport() {
+                  const { width, height } = api.getAppState()
+                  return { width, height }
+                },
+                setCamera(camera) {
+                  const current = api.getAppState()
+                  api.updateScene({
+                    appState: {
+                      scrollX: camera.scrollX ?? current.scrollX,
+                      scrollY: camera.scrollY ?? current.scrollY,
+                      zoom: {
+                        value: (camera.zoom ?? current.zoom.value) as never,
+                      },
+                    },
+                  })
+                  slideConstraintsRef.current?.correctCamera()
+                },
+                getStoredElementsInsideSlide() {
+                  return allElementsInsideSlide(api.getSceneElements())
+                },
               }
             }}
+            onDuplicate={(nextElements, previousElements) =>
+              constrainElementsAfterGesture(
+                nextElements,
+                toElementsMap(previousElements),
+              )
+            }
             onChange={(elements, appState, files) => {
               if (isReadOnly) return
               const nextTheme = appState.theme
@@ -428,6 +529,12 @@ export function EditorPage() {
                 window.setTimeout(() => {
                   void setThemePreference(nextTheme)
                 }, 0)
+              }
+              if (slideConstraintsRef.current?.isGestureActive()) {
+                return
+              }
+              if (!allElementsInsideSlide(elements as never[])) {
+                return
               }
               const scene = toPersistentScene(
                 elements,
