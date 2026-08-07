@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { Download, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -97,7 +98,9 @@ export function HomePage() {
     <div className="min-h-full">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-6">
-          <h1 className="text-lg font-semibold tracking-tight">Slaide</h1>
+          <h1 className="text-lg font-semibold tracking-tight" aria-label="Slaide">
+            💅
+          </h1>
           <ThemeSelector />
         </div>
       </header>
@@ -124,10 +127,11 @@ export function HomePage() {
               <li key={deck.id} className="min-w-0">
                 <Card size="sm" className="h-full">
                   <CardHeader>
-                    <CardTitle>
+                    <CardTitle className="min-w-0">
                       <Link
                         to={`/decks/${deck.id}`}
-                        className="text-foreground underline-offset-4 hover:underline"
+                        className="block truncate text-foreground underline-offset-4 hover:underline"
+                        title={deck.title}
                       >
                         {deck.title}
                       </Link>
@@ -144,32 +148,41 @@ export function HomePage() {
                       </time>
                     </CardAction>
                   </CardHeader>
-                  <CardFooter className="gap-2">
+                  <CardFooter className="gap-1">
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
+                      size="icon-sm"
+                      aria-label={`Export ${deck.title}`}
+                      title={`Export ${deck.title}`}
                       onClick={() => void handleExport(deck)}
                     >
-                      Export {deck.title}
+                      <Download />
+                      <span className="sr-only">Export {deck.title}</span>
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
+                      size="icon-sm"
+                      aria-label={`Rename ${deck.title}`}
+                      title={`Rename ${deck.title}`}
                       onClick={() =>
                         setDialog({ type: 'rename', deck, title: deck.title })
                       }
                     >
-                      Rename {deck.title}
+                      <Pencil />
+                      <span className="sr-only">Rename {deck.title}</span>
                     </Button>
                     <Button
                       type="button"
                       variant="destructive"
-                      size="sm"
+                      size="icon-sm"
+                      aria-label={`Delete ${deck.title}`}
+                      title={`Delete ${deck.title}`}
                       onClick={() => setDialog({ type: 'delete', deck })}
                     >
-                      Delete {deck.title}
+                      <Trash2 />
+                      <span className="sr-only">Delete {deck.title}</span>
                     </Button>
                   </CardFooter>
                 </Card>
@@ -191,7 +204,6 @@ export function HomePage() {
                   <DialogTitle>Rename deck</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-2">
-                  <Label htmlFor={titleInputId}>Deck title</Label>
                   <Input
                     id={titleInputId}
                     value={dialog.title}

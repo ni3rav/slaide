@@ -22,7 +22,7 @@ describe('viewport policy', () => {
 
   it('uses the approved larger-screen message', () => {
     expect(VIEWPORT_BLOCKER_MESSAGE).toBe(
-      'Slaide requires a larger screen. Please use a desktop computer.',
+      '💅 requires a larger screen. Please use a desktop computer.',
     )
   })
 })

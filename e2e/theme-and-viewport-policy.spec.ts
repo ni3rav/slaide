@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const VIEWPORT_BLOCKER_MESSAGE =
-  'Slaide requires a larger screen. Please use a desktop computer.'
+  '💅 requires a larger screen. Please use a desktop computer.'
 
 test.describe('apply theme and desktop viewport policy', () => {
   test('uses the system theme when no explicit preference exists', async ({ page }) => {
