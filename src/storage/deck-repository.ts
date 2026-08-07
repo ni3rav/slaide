@@ -46,6 +46,8 @@ export type DeckRepository = {
   createDeck: () => Promise<CreatedDeck>
   listDecks: () => Promise<DeckSummary[]>
   loadDeck: (deckId: DeckId) => Promise<LoadDeckResult>
+  renameDeck: (deckId: DeckId, title: string) => Promise<Deck>
+  deleteDeck: (deckId: DeckId) => Promise<void>
   dispose: () => Promise<void>
 }
 
@@ -113,12 +115,14 @@ export async function createDeckRepository(
         request.onerror = () => reject(request.error ?? new Error('Failed to list decks'))
       })
 
-      return decks.map((deck) => ({
-        id: deck.id,
-        title: deck.title,
-        slideCount: deck.slideOrder.length,
-        updatedAt: deck.updatedAt,
-      }))
+      return decks
+        .map((deck) => ({
+          id: deck.id,
+          title: deck.title,
+          slideCount: deck.slideOrder.length,
+          updatedAt: deck.updatedAt,
+        }))
+        .sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
     async loadDeck(deckId) {
@@ -135,6 +139,49 @@ export async function createDeckRepository(
       }
 
       return { status: 'ok', deck, slides }
+    },
+
+    async renameDeck(deckId, title) {
+      const existing = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!existing || !isValidDeck(existing)) {
+        throw new Error('Deck not found')
+      }
+
+      const updated: Deck = {
+        ...existing,
+        title,
+        updatedAt: Date.now(),
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(DECKS_STORE, 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to rename deck'))
+        tx.onabort = () => reject(tx.error ?? new Error('Deck rename aborted'))
+        tx.objectStore(DECKS_STORE).put(updated)
+      })
+
+      return updated
+    },
+
+    async deleteDeck(deckId) {
+      const existing = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!existing || !isValidDeck(existing)) {
+        throw new Error('Deck not found')
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to delete deck'))
+        tx.onabort = () => reject(tx.error ?? new Error('Deck deletion aborted'))
+        const decks = tx.objectStore(DECKS_STORE)
+        const slides = tx.objectStore(SLIDES_STORE)
+        for (const slideId of existing.slideOrder) {
+          slides.delete(slideId)
+        }
+        decks.delete(deckId)
+      })
     },
 
     async dispose() {
