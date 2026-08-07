@@ -1,5 +1,7 @@
 import { planSlideDeletion } from '../slide/slide-deletion.ts'
+import { planSlideDuplication } from '../slide/slide-duplication.ts'
 import { planSlideInsertion } from '../slide/slide-reorder.ts'
+import { planSlideSwap } from '../slide/slide-swap.ts'
 import {
   DECKS_STORE,
   getRecord,
@@ -56,6 +58,16 @@ export type ReorderedSlides = {
   slides: Slide[]
 }
 
+export type DuplicatedSlides = {
+  deck: Deck
+  slides: Slide[]
+}
+
+export type SwappedSlides = {
+  deck: Deck
+  slides: Slide[]
+}
+
 export type LoadDeckResult =
   | { status: 'ok'; deck: Deck; slides: Slide[] }
   | { status: 'missing' }
@@ -89,6 +101,15 @@ export type DeckRepository = {
     slideId: SlideId,
     insertionIndex: number,
   ) => Promise<ReorderedSlides>
+  duplicateSlides: (
+    deckId: DeckId,
+    slideIdsToDuplicate: SlideId[],
+  ) => Promise<DuplicatedSlides>
+  swapSlides: (
+    deckId: DeckId,
+    slideIdA: SlideId,
+    slideIdB: SlideId,
+  ) => Promise<SwappedSlides>
   dispose: () => Promise<void>
 }
 
@@ -477,6 +498,128 @@ export async function createDeckRepository(
         const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
         if (!stored || !isValidSlide(stored, deckId)) {
           throw new Error('Deck could not be loaded after slide reorder')
+        }
+        slides.push(stored)
+      }
+
+      return { deck: updatedDeck, slides }
+    },
+
+    async duplicateSlides(deckId, slideIdsToDuplicate) {
+      const deck = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!deck || !isValidDeck(deck)) {
+        throw new Error('Deck not found')
+      }
+
+      if (slideIdsToDuplicate.length === 0) {
+        throw new Error('No slides selected for duplication')
+      }
+
+      for (const slideId of slideIdsToDuplicate) {
+        if (!deck.slideOrder.includes(slideId)) {
+          throw new Error('Slide not found in deck')
+        }
+      }
+
+      const plan = planSlideDuplication(deck.slideOrder, slideIdsToDuplicate)
+      const now = Date.now()
+      const sourceSlides = new Map<SlideId, Slide>()
+
+      for (const { sourceId } of plan.copies) {
+        const source = await getRecord<Slide>(db, SLIDES_STORE, sourceId)
+        if (!source || !isValidSlide(source, deckId)) {
+          throw new Error('Slide not found')
+        }
+        sourceSlides.set(sourceId, source)
+      }
+
+      const copiedSlides: Slide[] = plan.copies.map(({ sourceId, copyId }) => {
+        const source = sourceSlides.get(sourceId)!
+        return {
+          id: copyId,
+          schemaVersion: RECORD_SCHEMA_VERSION,
+          deckId,
+          scene: structuredClone(source.scene),
+          createdAt: now,
+          updatedAt: now,
+        }
+      })
+
+      const updatedDeck: Deck = {
+        ...deck,
+        slideOrder: plan.slideOrder,
+        updatedAt: now,
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to duplicate slides'))
+        tx.onabort = () => reject(tx.error ?? new Error('Slide duplication aborted'))
+        const decks = tx.objectStore(DECKS_STORE)
+        const slides = tx.objectStore(SLIDES_STORE)
+
+        for (const slide of copiedSlides) {
+          slides.put(slide)
+        }
+        decks.put(updatedDeck)
+      })
+
+      const slides: Slide[] = []
+      for (const id of updatedDeck.slideOrder) {
+        const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+        if (!stored || !isValidSlide(stored, deckId)) {
+          throw new Error('Deck could not be loaded after slide duplication')
+        }
+        slides.push(stored)
+      }
+
+      return { deck: updatedDeck, slides }
+    },
+
+    async swapSlides(deckId, slideIdA, slideIdB) {
+      const deck = await getRecord<Deck>(db, DECKS_STORE, deckId)
+      if (!deck || !isValidDeck(deck)) {
+        throw new Error('Deck not found')
+      }
+
+      if (!deck.slideOrder.includes(slideIdA) || !deck.slideOrder.includes(slideIdB)) {
+        throw new Error('Slide not found in deck')
+      }
+
+      const plan = planSlideSwap(deck.slideOrder, slideIdA, slideIdB)
+      if (!plan.changed) {
+        const slides: Slide[] = []
+        for (const id of deck.slideOrder) {
+          const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+          if (!stored || !isValidSlide(stored, deckId)) {
+            throw new Error('Deck could not be loaded')
+          }
+          slides.push(stored)
+        }
+        return { deck, slides }
+      }
+
+      const now = Date.now()
+      const updatedDeck: Deck = {
+        ...deck,
+        slideOrder: plan.slideOrder,
+        updatedAt: now,
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(DECKS_STORE, 'readwrite')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error ?? new Error('Failed to swap slides'))
+        tx.onabort = () => reject(tx.error ?? new Error('Slide swap aborted'))
+        tx.objectStore(DECKS_STORE).put(updatedDeck)
+      })
+
+      const slides: Slide[] = []
+      for (const id of updatedDeck.slideOrder) {
+        const stored = await getRecord<Slide>(db, SLIDES_STORE, id)
+        if (!stored || !isValidSlide(stored, deckId)) {
+          throw new Error('Deck could not be loaded after slide swap')
         }
         slides.push(stored)
       }

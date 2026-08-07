@@ -22,6 +22,8 @@ import {
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import {
+  ArrowLeftRight,
+  Copy,
   Download,
   GripVertical,
   Home,
@@ -145,6 +147,10 @@ export function EditorPage() {
     // Ignore Excalidraw theme echoes until it reports the app-driven theme.
     suppressExcalidrawThemeSyncRef.current = true;
   }, [theme]);
+
+  useEffect(() => {
+    setCheckedSlideIds(new Set());
+  }, [deckId]);
 
   useEffect(() => {
     if (!deckId) {
@@ -385,6 +391,48 @@ export function EditorPage() {
     });
   }
 
+  async function handleDuplicateSlides() {
+    if (state.status !== "ok" || !deckId || state.editMode !== "editable")
+      return;
+    if (checkedSlideIds.size === 0) return;
+    if (!(await flushActiveScene())) return;
+
+    const duplicated = await repository.duplicateSlides(deckId, [
+      ...checkedSlideIds,
+    ]);
+    setCheckedSlideIds(new Set());
+    setState({
+      status: "ok",
+      deck: duplicated.deck,
+      slides: duplicated.slides,
+      activeSlide:
+        duplicated.slides.find(
+          (slide) => slide.id === state.activeSlide.id,
+        ) ?? state.activeSlide,
+      editMode: "editable",
+    });
+  }
+
+  async function handleSwapSlides() {
+    if (state.status !== "ok" || !deckId || state.editMode !== "editable")
+      return;
+    if (checkedSlideIds.size !== 2) return;
+    if (!(await flushActiveScene())) return;
+
+    const [slideIdA, slideIdB] = [...checkedSlideIds];
+    const swapped = await repository.swapSlides(deckId, slideIdA!, slideIdB!);
+    setCheckedSlideIds(new Set());
+    setState({
+      status: "ok",
+      deck: swapped.deck,
+      slides: swapped.slides,
+      activeSlide:
+        swapped.slides.find((slide) => slide.id === state.activeSlide.id) ??
+        state.activeSlide,
+      editMode: "editable",
+    });
+  }
+
   const slideSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -596,18 +644,43 @@ export function EditorPage() {
                 <span className="sr-only">Add slide</span>
               </Button>
               {checkedSlideIds.size > 0 && !isReadOnly ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  aria-label="Delete"
-                  title="Delete selected slides"
-                  onClick={() => void handleDeleteSlides()}
-                >
-                  <Trash2 />
-                  <span className="sr-only">Delete</span>
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Duplicate"
+                    title="Duplicate selected slides"
+                    onClick={() => void handleDuplicateSlides()}
+                  >
+                    <Copy />
+                    <span className="sr-only">Duplicate</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Swap"
+                    title="Swap selected slides"
+                    disabled={checkedSlideIds.size !== 2}
+                    onClick={() => void handleSwapSlides()}
+                  >
+                    <ArrowLeftRight />
+                    <span className="sr-only">Swap</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Delete"
+                    title="Delete selected slides"
+                    onClick={() => void handleDeleteSlides()}
+                  >
+                    <Trash2 />
+                    <span className="sr-only">Delete</span>
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>

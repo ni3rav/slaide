@@ -569,6 +569,151 @@ describe('DeckRepository', () => {
     if (loaded.status !== 'ok') return
     expect(loaded.deck.slideOrder).toEqual([slideA, slideB])
   })
+
+  it('duplicates checked slides after their sources and copies scenes with new ids', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+    const afterB = await repository.insertSlideAfter(created.deck.id, slideB)
+    const slideC = afterB.slide.id
+
+    const sourceScene = {
+      elements: [{ id: 'rect-1', type: 'rectangle' }],
+      appState: { viewBackgroundColor: '#112233' },
+      files: {
+        img1: {
+          id: 'img1',
+          mimeType: 'image/png',
+          dataURL: 'data:image/png;base64,abc',
+        },
+      },
+    }
+    await repository.saveScene(slideA, sourceScene)
+
+    const duplicated = await repository.duplicateSlides(created.deck.id, [slideA, slideC])
+
+    const [copyA, copyC] = duplicated.deck.slideOrder.filter(
+      (id) => id !== slideA && id !== slideB && id !== slideC,
+    )
+    expect(duplicated.deck.slideOrder).toEqual([slideA, copyA, slideB, slideC, copyC])
+    expect(copyA).not.toBe(slideA)
+    expect(copyC).not.toBe(slideC)
+
+    const copiedAScene = duplicated.slides.find((slide) => slide.id === copyA)?.scene
+    const copiedCScene = duplicated.slides.find((slide) => slide.id === copyC)?.scene
+    expect(copiedAScene).toEqual(sourceScene)
+    expect(copiedCScene).toEqual({
+      elements: [],
+      appState: {},
+      files: {},
+    })
+    expect(copiedAScene).not.toBe(sourceScene)
+    expect(duplicated.deck.updatedAt).toBeGreaterThanOrEqual(created.deck.updatedAt)
+  })
+
+  it('rejects duplicateSlides when no slide ids are provided', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.duplicateSlides(created.deck.id, []),
+    ).rejects.toThrow('No slides selected for duplication')
+  })
+
+  it('rejects duplicateSlides when a slide is not in slide order', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.duplicateSlides(created.deck.id, [crypto.randomUUID()]),
+    ).rejects.toThrow('Slide not found in deck')
+  })
+
+  it('leaves deck unchanged when duplicate slides transaction aborts', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.deck.slideOrder[0]!
+    const originalPut = IDBObjectStore.prototype.put
+
+    IDBObjectStore.prototype.put = function patchedPut(value, key) {
+      const request = originalPut.call(this, value, key)
+      if (this.name === 'slides') {
+        IDBObjectStore.prototype.put = originalPut
+        this.transaction.abort()
+      }
+      return request
+    }
+
+    try {
+      await expect(
+        repository.duplicateSlides(created.deck.id, [slideId]),
+      ).rejects.toThrow()
+    } finally {
+      IDBObjectStore.prototype.put = originalPut
+    }
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck).toEqual(created.deck)
+    expect(loaded.slides).toEqual(created.slides)
+  })
+
+  it('swaps two slide positions and updates deck last-modified time', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+    const afterB = await repository.insertSlideAfter(created.deck.id, slideB)
+    const slideC = afterB.slide.id
+
+    const swapped = await repository.swapSlides(created.deck.id, slideA, slideC)
+
+    expect(swapped.deck.slideOrder).toEqual([slideC, slideB, slideA])
+    expect(swapped.deck.updatedAt).toBeGreaterThanOrEqual(created.deck.updatedAt)
+    expect(swapped.slides.map((slide) => slide.id)).toEqual(swapped.deck.slideOrder)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck.slideOrder).toEqual([slideC, slideB, slideA])
+  })
+
+  it('rejects swapSlides when a slide is not in slide order', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.swapSlides(created.deck.id, created.slides[0]!.id, crypto.randomUUID()),
+    ).rejects.toThrow('Slide not found in deck')
+  })
+
+  it('leaves deck unchanged when swap transaction aborts', async () => {
+    const created = await repository.createDeck()
+    const slideA = created.deck.slideOrder[0]!
+    const afterA = await repository.insertSlideAfter(created.deck.id, slideA)
+    const slideB = afterA.slide.id
+    const originalPut = IDBObjectStore.prototype.put
+
+    IDBObjectStore.prototype.put = function patchedPut(value, key) {
+      const request = originalPut.call(this, value, key)
+      if (this.name === 'decks') {
+        IDBObjectStore.prototype.put = originalPut
+        this.transaction.abort()
+      }
+      return request
+    }
+
+    try {
+      await expect(
+        repository.swapSlides(created.deck.id, slideA, slideB),
+      ).rejects.toThrow()
+    } finally {
+      IDBObjectStore.prototype.put = originalPut
+    }
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.deck.slideOrder).toEqual([slideA, slideB])
+  })
 })
 
 async function patchDeckSlideOrder(
