@@ -36,6 +36,34 @@ describe('renderSlideToPngBlob', () => {
     bitmap.close()
   })
 
+  it('renders a light background by default', async () => {
+    const scene: Scene = {
+      elements: [],
+      appState: { viewBackgroundColor: '#ffffff' },
+      files: {},
+    }
+
+    const blob = await renderSlideToPngBlob(scene)
+    const [r, g, b] = await samplePixel(blob, SLIDE_WIDTH / 2, SLIDE_HEIGHT / 2)
+    expect(r).toBeGreaterThan(200)
+    expect(g).toBeGreaterThan(200)
+    expect(b).toBeGreaterThan(200)
+  })
+
+  it('carries the dark theme into the exported background', async () => {
+    const scene: Scene = {
+      elements: [],
+      appState: { viewBackgroundColor: '#ffffff' },
+      files: {},
+    }
+
+    const blob = await renderSlideToPngBlob(scene, 'dark')
+    const [r, g, b] = await samplePixel(blob, SLIDE_WIDTH / 2, SLIDE_HEIGHT / 2)
+    expect(r).toBeLessThan(80)
+    expect(g).toBeLessThan(80)
+    expect(b).toBeLessThan(80)
+  })
+
   it('preserves element positions inside the slide instead of shifting to top-left', async () => {
     const [rectangle] = convertToExcalidrawElements([
       {

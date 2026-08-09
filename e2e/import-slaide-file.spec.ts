@@ -12,6 +12,7 @@ type SlaideFile = {
     slideOrder: string[]
     createdAt: number
     updatedAt: number
+    theme?: 'light' | 'dark'
   }
   slides: Array<{
     id: string
@@ -135,6 +136,25 @@ test.describe('import a slaide file from the home screen', () => {
     await expect(page.getByRole('link', { name: 'Out of bounds' })).toHaveCount(0)
   })
 
+  test('stores the exported theme and restores it on import', async ({ page }) => {
+    await page.goto('/')
+    await createDeckFromHome(page)
+    await renameDeck(page, 'Theme deck')
+
+    const download = await triggerHomeExport(page, 'Theme deck', 'dark')
+    const exported = await readExportedSlaideFile(download)
+    expect(exported.deck.theme).toBe('dark')
+
+    await triggerImport(page, await download.path())
+    await expect(page.getByRole('link', { name: 'Theme deck (Imported)' })).toBeVisible()
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.classList.contains('dark')),
+      )
+      .toBe(true)
+  })
+
   test('export then import round trips scene content with new identities', async ({ page }) => {
     await page.goto('/')
     const originalDeckId = await createDeckFromHome(page)
@@ -191,10 +211,20 @@ async function triggerImport(page: Page, filePath: string | null | undefined): P
   })
 }
 
-async function triggerHomeExport(page: Page, deckTitle: string) {
+async function triggerHomeExport(
+  page: Page,
+  deckTitle: string,
+  theme: 'light' | 'dark' = 'light',
+) {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: `Export ${deckTitle}` }).click()
   await page.getByRole('menuitem', { name: 'Slaide' }).click()
+  const dialog = page.getByTestId('export-theme-dialog')
+  await expect(dialog).toBeVisible()
+  if (theme === 'dark') {
+    await dialog.getByRole('radio', { name: 'Dark Mode' }).click()
+  }
+  await dialog.getByRole('button', { name: 'Export' }).click()
   return downloadPromise
 }
 

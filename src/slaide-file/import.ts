@@ -107,9 +107,17 @@ export function validateSlaideFile(value: unknown): SlaideFile {
     throw new SlaideImportError('Import file contains slides that are not in slide order')
   }
 
+  const theme = deck.theme === 'light' || deck.theme === 'dark' ? deck.theme : undefined
+  const normalizedDeck: Deck = { ...(deck as Deck) }
+  if (theme) {
+    normalizedDeck.theme = theme
+  } else {
+    delete normalizedDeck.theme
+  }
+
   return {
     formatVersion: SLAIDE_FILE_FORMAT_VERSION,
-    deck: deck as Deck,
+    deck: normalizedDeck,
     slides: deck.slideOrder.map((slideId) => slidesById.get(slideId)!),
   }
 }

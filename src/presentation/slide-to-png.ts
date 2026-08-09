@@ -37,7 +37,12 @@ const SLIDE_EXPORT_FRAME = {
   name: null,
 } as unknown as ExcalidrawFrameLikeElement
 
-export async function renderSlideToPngBlob(scene: Scene): Promise<Blob> {
+export type SlideRenderTheme = 'light' | 'dark'
+
+export async function renderSlideToPngBlob(
+  scene: Scene,
+  theme: SlideRenderTheme = 'light',
+): Promise<Blob> {
   const viewBackgroundColor =
     typeof scene.appState.viewBackgroundColor === 'string'
       ? scene.appState.viewBackgroundColor
@@ -49,7 +54,7 @@ export async function renderSlideToPngBlob(scene: Scene): Promise<Blob> {
       ...scene.appState,
       exportBackground: true,
       viewBackgroundColor,
-      exportWithDarkMode: false,
+      exportWithDarkMode: theme === 'dark',
       frameRendering: {
         enabled: false,
         name: false,

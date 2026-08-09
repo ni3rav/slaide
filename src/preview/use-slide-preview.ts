@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { renderSlideToPngBlob } from '../presentation/slide-to-png.ts'
+import {
+  renderSlideToPngBlob,
+  type SlideRenderTheme,
+} from '../presentation/slide-to-png.ts'
 import type { Scene, Slide, SlideId } from '../storage/deck-repository.ts'
 import { PREVIEW_CLOSE_DURATION_MS } from './constants.ts'
 import {
@@ -29,14 +32,20 @@ type PendingPreview = {
 type UseSlidePreviewOptions = {
   resolveScene: (slide: Slide, isActive: boolean) => Promise<Scene>
   render?: SlidePreviewRender
+  theme?: SlideRenderTheme
 }
 
-export function useSlidePreview({ resolveScene, render }: UseSlidePreviewOptions) {
+export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreviewOptions) {
   const controllerRef = useRef<SlidePreviewController | null>(null)
   const failNextRenderRef = useRef(false)
   const loadGenerationRef = useRef(0)
   const pendingOpenRef = useRef<PendingPreview | null>(null)
+  const themeRef = useRef<SlideRenderTheme>(theme ?? 'light')
   const [session, setSession] = useState<SlidePreviewSession | null>(null)
+
+  useEffect(() => {
+    themeRef.current = theme ?? 'light'
+  }, [theme])
 
   if (!controllerRef.current) {
     controllerRef.current = createSlidePreviewController(async (scene) => {
@@ -44,7 +53,7 @@ export function useSlidePreview({ resolveScene, render }: UseSlidePreviewOptions
         failNextRenderRef.current = false
         throw new Error('Preview render failed')
       }
-      return (render ?? renderSlideToPngBlob)(scene)
+      return render ? render(scene) : renderSlideToPngBlob(scene, themeRef.current)
     })
   }
 

@@ -6,6 +6,8 @@ import {
   createPresentationImageCache,
   type PresentationImageCache,
 } from '../presentation/presentation-image-cache.ts'
+import { renderSlideToPngBlob } from '../presentation/slide-to-png.ts'
+import { useTheme } from './ThemeProvider.tsx'
 import { canAcceptPresentationNavigation } from '../presentation/presentation-navigation-throttle.ts'
 import {
   exitPresentationFullscreen,
@@ -61,6 +63,11 @@ export function PresentationPage() {
   const [searchParams] = useSearchParams()
   const repository = useDeckRepository()
   const navigate = useNavigate()
+  const { theme } = useTheme()
+  // Read at cache creation so all slides render with the app theme active when
+  // the presentation started. A ref avoids restarting the session on unrelated
+  // re-renders while still capturing the latest theme.
+  const themeRef = useRef(theme)
   const overlayRef = useRef<HTMLDivElement>(null)
   const cacheRef = useRef<PresentationImageCache | null>(null)
   const fullscreenEnteredRef = useRef(false)
@@ -68,6 +75,10 @@ export function PresentationPage() {
   const navigationRequestRef = useRef(0)
   const lastNavigationAtRef = useRef<number | null>(null)
   const [state, setState] = useState<PresentationState>({ status: 'loading' })
+
+  useEffect(() => {
+    themeRef.current = theme
+  }, [theme])
 
   const exitPresentation = useCallback(() => {
     exitingRef.current = true
@@ -144,7 +155,9 @@ export function PresentationPage() {
     }
 
     let cancelled = false
-    const cache = createPresentationImageCache()
+    const cache = createPresentationImageCache((scene) =>
+      renderSlideToPngBlob(scene, themeRef.current),
+    )
     cacheRef.current = cache
 
     async function start() {
@@ -382,16 +395,12 @@ export function PresentationPage() {
 
       if (!fullscreenEnteredRef.current) return
       fullscreenEnteredRef.current = false
-      setState((previous) =>
-        previous.status === 'ready'
-          ? { ...previous, fullscreenDenied: true }
-          : previous,
-      )
+      exitPresentation()
     }
 
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  }, [state.status])
+  }, [exitPresentation, state.status])
 
   if (state.status === 'loading') {
     return (
