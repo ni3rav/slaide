@@ -200,7 +200,7 @@ export function EditorPage() {
     openPreview,
     handleCloseComplete: handlePreviewCloseComplete,
     retryPreview,
-  } = useSlidePreview({ resolveScene: resolveSceneForPreview });
+  } = useSlidePreview({ resolveScene: resolveSceneForPreview, theme });
 
   useEffect(() => {
     themeFromAppRef.current = theme;
@@ -1333,31 +1333,33 @@ function SortableSlideRow({
             <Eye className="size-3.5" aria-hidden="true" />
           </button>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className={`h-auto min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-md border p-0 shadow-none ${
-            isActive
-              ? "border-primary ring-2 ring-primary/30"
-              : "border-border hover:border-foreground/25"
-          }`}
-          aria-current={isActive ? "true" : undefined}
-          onClick={onSelect}
-        >
-          <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
-            {index + 1}
-          </span>
-        </Button>
+        <div className="relative min-w-0 flex-1">
+          <Button
+            type="button"
+            variant="outline"
+            className={`h-auto w-full flex-col gap-0 overflow-hidden rounded-md border p-0 shadow-none ${
+              isActive
+                ? "border-primary ring-2 ring-primary/30"
+                : "border-border hover:border-foreground/25"
+            }`}
+            aria-current={isActive ? "true" : undefined}
+            onClick={onSelect}
+          >
+            <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
+              {index + 1}
+            </span>
+          </Button>
+          {previewSession ? (
+            <SlidePreviewPanel
+              slideNumber={index + 1}
+              state={previewSession.panelState}
+              imageUrl={previewSession.imageUrl}
+              onRetry={onPreviewRetry}
+              onCloseComplete={onPreviewCloseComplete}
+            />
+          ) : null}
+        </div>
       </div>
-      {previewSession ? (
-        <SlidePreviewPanel
-          slideNumber={index + 1}
-          state={previewSession.panelState}
-          imageUrl={previewSession.imageUrl}
-          onRetry={onPreviewRetry}
-          onCloseComplete={onPreviewCloseComplete}
-        />
-      ) : null}
     </li>
   );
 }
