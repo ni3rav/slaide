@@ -214,6 +214,28 @@ export function EditorPage() {
   }, [theme]);
 
   useEffect(() => {
+    if (state.status !== "ok") return;
+    if (!previewSession || previewSession.panelState === "closing") return;
+
+    const sessionSlideId = previewSession.slideId;
+    const activeSlideId = state.activeSlide.id;
+    const slides = state.slides;
+
+    function handlePreviewEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (document.querySelector('[role="dialog"],[role="alertdialog"]')) return;
+      const slide = slides.find((entry) => entry.id === sessionSlideId);
+      if (!slide) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openPreview(slide, slide.id === activeSlideId);
+    }
+
+    window.addEventListener("keydown", handlePreviewEscape, true);
+    return () => window.removeEventListener("keydown", handlePreviewEscape, true);
+  }, [openPreview, previewSession, state]);
+
+  useEffect(() => {
     setCheckedSlideIds(new Set());
   }, [deckId]);
 

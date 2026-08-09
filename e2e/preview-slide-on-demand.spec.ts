@@ -99,6 +99,21 @@ test.describe('preview slide on demand', () => {
       .toBe(0)
   })
 
+  test('closes an open preview when Escape is pressed', async ({ page }) => {
+    await openEditor(page)
+
+    await page.getByRole('button', { name: 'Preview slide 1' }).click()
+    await expect(page.getByTestId('slide-preview-image')).toBeVisible({ timeout: 15000 })
+
+    await page.keyboard.press('Escape')
+
+    await expect(page.getByTestId('slide-preview-panel')).toHaveCount(0, { timeout: 2000 })
+    await expect(page.getByRole('button', { name: 'Preview slide 1' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+  })
+
   test('preview control does not navigate to another slide', async ({ page }) => {
     await openEditor(page)
 

@@ -395,16 +395,12 @@ export function PresentationPage() {
 
       if (!fullscreenEnteredRef.current) return
       fullscreenEnteredRef.current = false
-      setState((previous) =>
-        previous.status === 'ready'
-          ? { ...previous, fullscreenDenied: true }
-          : previous,
-      )
+      exitPresentation()
     }
 
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  }, [state.status])
+  }, [exitPresentation, state.status])
 
   if (state.status === 'loading') {
     return (

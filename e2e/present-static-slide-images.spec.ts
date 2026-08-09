@@ -190,9 +190,12 @@ test.describe('present static slide images', () => {
     expect(requestPath).toMatch(/^\/decks\/[0-9a-f-]{36}$/i)
   })
 
-  test('stays in presentation when the browser leaves fullscreen', async ({ page }) => {
+  test('exits presentation to the editor when the browser leaves fullscreen', async ({
+    page,
+  }) => {
     await stubFullscreenSuccess(page)
     await openEditor(page)
+    const deckId = page.url().split('/').at(-1)!
 
     await page.getByRole('button', { name: 'Present' }).click()
     await expect(page.getByTestId('presentation-slide-image')).toBeVisible()
@@ -205,10 +208,10 @@ test.describe('present static slide images', () => {
       document.dispatchEvent(new Event('fullscreenchange'))
     })
 
-    await expect(page).toHaveURL(/\/present\?start=0$/)
-    await expect(page.getByTestId('presentation-overlay')).toBeVisible()
-    await expect(page.getByTestId('fullscreen-warning')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/decks/${deckId}$`))
+    await expect(page.getByTestId('excalidraw-host')).toBeVisible()
+    await expect(page.getByTestId('presentation-overlay')).toHaveCount(0)
+    await expect(page.getByTestId('fullscreen-warning')).toHaveCount(0)
   })
 
   test('navigates with controls and arrow keys without wrapping', async ({ page }) => {
