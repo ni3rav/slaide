@@ -11,6 +11,7 @@ import {
 
 export type DeckId = string
 export type SlideId = string
+export type DeckTheme = 'light' | 'dark'
 
 export type Scene = {
   elements: unknown[]
@@ -25,6 +26,7 @@ export type Deck = {
   slideOrder: SlideId[]
   createdAt: number
   updatedAt: number
+  theme?: DeckTheme
 }
 
 export type Slide = {
@@ -655,7 +657,8 @@ function isValidDeck(value: unknown): value is Deck {
     Array.isArray(deck.slideOrder) &&
     deck.slideOrder.length >= 1 &&
     deck.slideOrder.every((id) => typeof id === 'string') &&
-    new Set(deck.slideOrder).size === deck.slideOrder.length
+    new Set(deck.slideOrder).size === deck.slideOrder.length &&
+    (deck.theme === undefined || deck.theme === 'light' || deck.theme === 'dark')
   )
 }
 

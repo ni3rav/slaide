@@ -88,6 +88,7 @@ test.describe('export one deck as a slaide file', () => {
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export Untitled deck' }).click()
     await page.getByRole('menuitem', { name: 'Pdf' }).click()
+    await chooseExportTheme(page)
     const download = await downloadPromise
 
     expect(download.suggestedFilename()).toBe('Untitled deck.pdf')
@@ -111,6 +112,7 @@ test.describe('export one deck as a slaide file', () => {
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export deck' }).click()
     await page.getByRole('menuitem', { name: 'Slaide' }).click()
+    await chooseExportTheme(page)
     const download = await downloadPromise
 
     const exported = await readExportedSlaideFile(download)
@@ -126,6 +128,7 @@ test.describe('export one deck as a slaide file', () => {
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export deck' }).click()
     await page.getByRole('menuitem', { name: 'Pdf' }).click()
+    await chooseExportTheme(page)
     const download = await downloadPromise
 
     expect(download.suggestedFilename()).toBe('Untitled deck.pdf')
@@ -159,6 +162,7 @@ test.describe('export one deck as a slaide file', () => {
     })
     await page.getByRole('button', { name: 'Export deck' }).click()
     await page.getByRole('menuitem', { name: 'Slaide' }).click()
+    await chooseExportTheme(page)
 
     await expect(page.getByTestId('export-error')).toBeVisible()
     await expect(page.getByText('Export failed')).toBeVisible()
@@ -204,7 +208,17 @@ async function triggerHomeExport(page: Page, deckTitle: string) {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: `Export ${deckTitle}` }).click()
   await page.getByRole('menuitem', { name: 'Slaide' }).click()
+  await chooseExportTheme(page)
   return downloadPromise
+}
+
+async function chooseExportTheme(page: Page, theme: 'light' | 'dark' = 'light') {
+  const dialog = page.getByTestId('export-theme-dialog')
+  await expect(dialog).toBeVisible()
+  if (theme === 'dark') {
+    await dialog.getByRole('radio', { name: 'Dark Mode' }).click()
+  }
+  await dialog.getByRole('button', { name: 'Export' }).click()
 }
 
 async function readExportedSlaideFile(download: {

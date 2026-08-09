@@ -1,7 +1,11 @@
-import type { Deck, Slide } from '../storage/deck-repository.ts'
+import type { Deck, DeckTheme, Slide } from '../storage/deck-repository.ts'
 import { SLAIDE_FILE_FORMAT_VERSION, type SlaideFile } from './schema.ts'
 
-export function serializeDeckToSlaideFile(deck: Deck, slides: Slide[]): SlaideFile {
+export function serializeDeckToSlaideFile(
+  deck: Deck,
+  slides: Slide[],
+  theme?: DeckTheme,
+): SlaideFile {
   const slidesById = new Map(slides.map((slide) => [slide.id, slide]))
   const orderedSlides: Slide[] = []
 
@@ -18,7 +22,7 @@ export function serializeDeckToSlaideFile(deck: Deck, slides: Slide[]): SlaideFi
 
   return {
     formatVersion: SLAIDE_FILE_FORMAT_VERSION,
-    deck,
+    deck: theme ? { ...deck, theme } : deck,
     slides: orderedSlides,
   }
 }

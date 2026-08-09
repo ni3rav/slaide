@@ -95,6 +95,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useTheme } from "./ThemeProvider.tsx";
 import { ThemeSelector } from "./ThemeSelector.tsx";
+import { ExportThemeDialog } from "./ExportThemeDialog.tsx";
+import type { DeckTheme } from "../storage/deck-repository.ts";
 
 type EditorState =
   | { status: "loading" }
@@ -154,6 +156,9 @@ export function EditorPage() {
   const slideReorderInFlightRef = useRef(false);
   const [presentStartDialogOpen, setPresentStartDialogOpen] = useState(false);
   const [presentError, setPresentError] = useState(false);
+  const [pendingExportFormat, setPendingExportFormat] = useState<
+    "pdf" | "slaide" | null
+  >(null);
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(
     null,
   );
@@ -625,7 +630,7 @@ export function EditorPage() {
     setPresentStartDialogOpen(true);
   }
 
-  async function handleExport(format: "pdf" | "slaide") {
+  async function handleExport(format: "pdf" | "slaide", exportTheme: DeckTheme) {
     if (state.status !== "ok" || !deckId || exporting) return;
     setExportFailureStage(null);
     setExporting(true);
@@ -648,9 +653,9 @@ export function EditorPage() {
 
       if (format === "pdf") {
         const { exportDeckAsPdf } = await import("../pdf/export-deck.ts");
-        await exportDeckAsPdf(loaded.deck, loaded.slides);
+        await exportDeckAsPdf(loaded.deck, loaded.slides, exportTheme);
       } else {
-        exportDeckAsSlaideFile(loaded.deck, loaded.slides);
+        exportDeckAsSlaideFile(loaded.deck, loaded.slides, exportTheme);
       }
     } catch {
       setExportFailureStage("export");
@@ -931,11 +936,13 @@ export function EditorPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => void handleExport("slaide")}>
+                <DropdownMenuItem
+                  onSelect={() => setPendingExportFormat("slaide")}
+                >
                   <FileJson />
                   SLAIDE
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void handleExport("pdf")}>
+                <DropdownMenuItem onSelect={() => setPendingExportFormat("pdf")}>
                   <FileText />
                   PDF
                 </DropdownMenuItem>
@@ -1032,6 +1039,19 @@ export function EditorPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <ExportThemeDialog
+          format={pendingExportFormat}
+          defaultTheme={theme}
+          onCancel={() => setPendingExportFormat(null)}
+          onConfirm={(exportTheme) => {
+            const format = pendingExportFormat;
+            setPendingExportFormat(null);
+            if (format) {
+              void handleExport(format, exportTheme);
+            }
+          }}
+        />
 
         <div
           className="editor-canvas relative min-h-0 flex-1 bg-muted/30 [&_.excalidraw]:h-full"

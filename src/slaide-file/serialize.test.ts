@@ -68,6 +68,19 @@ describe('serializeDeckToSlaideFile', () => {
     expect(exportedSlide?.scene.files).toEqual(slideTwo.scene.files)
   })
 
+  it('stores the selected theme in deck metadata when provided', () => {
+    expect(serializeDeckToSlaideFile(deck, [slideOne, slideTwo], 'dark').deck.theme).toBe(
+      'dark',
+    )
+    expect(serializeDeckToSlaideFile(deck, [slideOne, slideTwo], 'light').deck.theme).toBe(
+      'light',
+    )
+  })
+
+  it('omits the theme when none is provided', () => {
+    expect(serializeDeckToSlaideFile(deck, [slideOne, slideTwo]).deck.theme).toBeUndefined()
+  })
+
   it('rejects slides that do not belong to the deck', () => {
     const foreignSlide: Slide = {
       ...slideOne,

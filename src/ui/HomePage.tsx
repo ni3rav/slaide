@@ -28,14 +28,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDeckRepository } from "../storage/deck-repository-context.tsx";
-import type { DeckSummary } from "../storage/deck-repository.ts";
+import type { DeckSummary, DeckTheme } from "../storage/deck-repository.ts";
 import { exportDeckAsSlaideFile } from "../slaide-file/export-deck.ts";
 import {
   importErrorMessage,
   prepareDeckImportFromFile,
 } from "../slaide-file/import-deck.ts";
 import { requestPersistentStorageAfterFirstDeck } from "../storage/persistent-storage.ts";
+import { ExportThemeDialog } from "./ExportThemeDialog.tsx";
 import { ThemeSelector } from "./ThemeSelector.tsx";
+import { useTheme } from "./ThemeProvider.tsx";
 
 type DialogState =
   | { type: "none" }
@@ -45,6 +47,7 @@ type DialogState =
 export function HomePage() {
   const repository = useDeckRepository();
   const navigate = useNavigate();
+  const { theme, setThemePreference } = useTheme();
   const [decks, setDecks] = useState<DeckSummary[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [dialog, setDialog] = useState<DialogState>({ type: "none" });
@@ -53,6 +56,10 @@ export function HomePage() {
   const [importing, setImporting] = useState(false);
   const [exportingDeckId, setExportingDeckId] = useState<string | null>(null);
   const [exportError, setExportError] = useState(false);
+  const [pendingExport, setPendingExport] = useState<{
+    deck: DeckSummary;
+    format: "pdf" | "slaide";
+  } | null>(null);
   const titleInputId = useId();
   const importInputRef = useRef<HTMLInputElement>(null);
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
@@ -118,7 +125,11 @@ export function HomePage() {
     }
   }
 
-  async function handleExport(deck: DeckSummary, format: "pdf" | "slaide") {
+  async function handleExport(
+    deck: DeckSummary,
+    format: "pdf" | "slaide",
+    exportTheme: DeckTheme,
+  ) {
     if (exportingDeckId !== null) return;
     setExportingDeckId(deck.id);
     setExportError(false);
@@ -130,9 +141,9 @@ export function HomePage() {
       }
       if (format === "pdf") {
         const { exportDeckAsPdf } = await import("../pdf/export-deck.ts");
-        await exportDeckAsPdf(loaded.deck, loaded.slides);
+        await exportDeckAsPdf(loaded.deck, loaded.slides, exportTheme);
       } else {
-        exportDeckAsSlaideFile(loaded.deck, loaded.slides);
+        exportDeckAsSlaideFile(loaded.deck, loaded.slides, exportTheme);
       }
     } catch {
       setExportError(true);
@@ -152,6 +163,13 @@ export function HomePage() {
         existingDecks.map((deck) => deck.title),
       );
       await repository.importDeck(prepared.deck, prepared.slides);
+      if (prepared.deck.theme) {
+        try {
+          await setThemePreference(prepared.deck.theme);
+        } catch {
+          // Keep the import successful even if the theme switch fails.
+        }
+      }
       if (existingDecks.length === 0) {
         void requestPersistentStorageAfterFirstDeck();
       }
@@ -292,13 +310,17 @@ export function HomePage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start">
                         <DropdownMenuItem
-                          onSelect={() => void handleExport(deck, "slaide")}
+                          onSelect={() =>
+                            setPendingExport({ deck, format: "slaide" })
+                          }
                         >
                           <FileJson />
                           SLAIDE
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onSelect={() => void handleExport(deck, "pdf")}
+                          onSelect={() =>
+                            setPendingExport({ deck, format: "pdf" })
+                          }
                         >
                           <FileText />
                           PDF
@@ -417,6 +439,19 @@ export function HomePage() {
             ) : null}
           </DialogContent>
         </Dialog>
+
+        <ExportThemeDialog
+          format={pendingExport?.format ?? null}
+          defaultTheme={theme}
+          onCancel={() => setPendingExport(null)}
+          onConfirm={(exportTheme) => {
+            const target = pendingExport;
+            setPendingExport(null);
+            if (target) {
+              void handleExport(target.deck, target.format, exportTheme);
+            }
+          }}
+        />
       </main>
     </div>
   );

@@ -208,6 +208,37 @@ describe('validateSlaideFile', () => {
   })
 })
 
+describe('theme metadata', () => {
+  it('preserves a valid theme from deck metadata', () => {
+    const file = serializeDeckToSlaideFile(
+      structuredClone(deck),
+      structuredClone([slideOne, slideTwo]),
+      'dark',
+    )
+    expect(validateSlaideFile(file).deck.theme).toBe('dark')
+  })
+
+  it('falls back to no theme when metadata is missing', () => {
+    expect(validateSlaideFile(validFile()).deck.theme).toBeUndefined()
+  })
+
+  it('drops an invalid theme value instead of breaking the import', () => {
+    const file = validFile()
+    ;(file.deck as { theme?: unknown }).theme = 'purple'
+    expect(validateSlaideFile(file).deck.theme).toBeUndefined()
+  })
+
+  it('carries the theme through remap for import', () => {
+    const file = serializeDeckToSlaideFile(
+      structuredClone(deck),
+      structuredClone([slideOne, slideTwo]),
+      'light',
+    )
+    const remapped = remapSlaideFileForImport(validateSlaideFile(file), [])
+    expect(remapped.deck.theme).toBe('light')
+  })
+})
+
 describe('remapSlaideFileForImport', () => {
   it('generates new deck and slide IDs while preserving scene content', () => {
     const file = validFile()

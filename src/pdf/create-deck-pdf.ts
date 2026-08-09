@@ -1,13 +1,19 @@
-import { renderSlideToPngBlob } from '../presentation/slide-to-png.ts'
+import {
+  renderSlideToPngBlob,
+  type SlideRenderTheme,
+} from '../presentation/slide-to-png.ts'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../slide/slide-dimensions.ts'
 import type { Slide } from '../storage/deck-repository.ts'
 
-export async function createDeckPdfBlob(slides: Slide[]): Promise<Blob> {
+export async function createDeckPdfBlob(
+  slides: Slide[],
+  theme: SlideRenderTheme = 'light',
+): Promise<Blob> {
   const { PDFDocument } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
 
   for (const slide of slides) {
-    const pngBlob = await renderSlideToPngBlob(slide.scene)
+    const pngBlob = await renderSlideToPngBlob(slide.scene, theme)
     const png = await pdf.embedPng(await pngBlob.arrayBuffer())
     const page = pdf.addPage([SLIDE_WIDTH, SLIDE_HEIGHT])
     page.drawImage(png, {
