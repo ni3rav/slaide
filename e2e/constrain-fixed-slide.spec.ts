@@ -188,10 +188,6 @@ async function readSlideVisibility(page: Page): Promise<{
   )
 }
 
-async function readViewportWidth(page: Page): Promise<number> {
-  return page.evaluate(() => window.__slaideTest!.getViewport().width)
-}
-
 async function readBoardState(page: Page) {
   return page.evaluate(
     ([slideWidth, slideHeight]) => {
