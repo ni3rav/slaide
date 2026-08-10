@@ -12,33 +12,27 @@ export function createSlidePreviewController(
   render: SlidePreviewRender,
 ): SlidePreviewController {
   let objectUrl: string | null = null
-  let pending: Promise<string> | null = null
+  let generation = 0
 
   function revoke() {
+    generation += 1
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl)
       objectUrl = null
     }
-    pending = null
   }
 
   async function load(scene: Scene): Promise<string> {
-    if (objectUrl) return objectUrl
-    if (pending) return pending
+    revoke()
+    const loadGeneration = generation
+    const blob = await render(scene)
+    if (loadGeneration !== generation) {
+      throw new Error('Preview generation was superseded')
+    }
 
-    pending = render(scene)
-      .then((blob) => {
-        const url = URL.createObjectURL(blob)
-        objectUrl = url
-        pending = null
-        return url
-      })
-      .catch((error) => {
-        pending = null
-        throw error
-      })
-
-    return pending
+    const url = URL.createObjectURL(blob)
+    objectUrl = url
+    return url
   }
 
   return {

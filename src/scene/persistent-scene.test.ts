@@ -56,4 +56,39 @@ describe('toPersistentScene', () => {
 
     expect(scene.elements).toEqual([{ id: 'ok', type: 'ellipse' }])
   })
+
+  it('preserves Excalidraw text formatting and text-tool defaults', () => {
+    const formattedText = {
+      id: 'text-1',
+      type: 'text',
+      fontFamily: 2,
+      fontSize: 32,
+      textAlign: 'right',
+      verticalAlign: 'middle',
+      lineHeight: 1.4,
+      strokeColor: '#123456',
+      opacity: 65,
+      text: 'Formatted',
+      originalText: 'Formatted',
+      autoResize: false,
+      containerId: null,
+    }
+
+    const scene = toPersistentScene(
+      [formattedText],
+      {
+        currentItemFontFamily: 2,
+        currentItemFontSize: 32,
+        currentItemTextAlign: 'right',
+      },
+      {},
+    )
+
+    expect(scene.elements).toEqual([formattedText])
+    expect(scene.appState).toEqual({
+      currentItemFontFamily: 2,
+      currentItemFontSize: 32,
+      currentItemTextAlign: 'right',
+    })
+  })
 })

@@ -162,7 +162,7 @@ export function HomePage() {
         file,
         existingDecks.map((deck) => deck.title),
       );
-      await repository.importDeck(prepared.deck, prepared.slides);
+      const imported = await repository.importDeck(prepared.deck, prepared.slides);
       if (prepared.deck.theme) {
         try {
           await setThemePreference(prepared.deck.theme);
@@ -173,7 +173,7 @@ export function HomePage() {
       if (existingDecks.length === 0) {
         void requestPersistentStorageAfterFirstDeck();
       }
-      await refreshDecks();
+      navigate(`/decks/${imported.deck.id}`);
     } catch (error) {
       setImportError(importErrorMessage(error));
     } finally {
@@ -206,13 +206,19 @@ export function HomePage() {
               ref={importInputRef}
               type="file"
               accept=".slaide,application/json"
+              multiple={false}
               className="sr-only"
               data-testid="import-slaide-input"
               aria-label="Import Slaide file"
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void handleImportFile(file);
+                const files = event.currentTarget.files;
+                if (files?.length === 1) {
+                  void handleImportFile(files[0]!);
+                  return;
+                }
+                if (files && files.length > 1) {
+                  setImportError("Import one Slaide file at a time.");
+                  event.currentTarget.value = "";
                 }
               }}
             />

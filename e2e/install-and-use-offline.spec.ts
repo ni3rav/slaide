@@ -105,7 +105,7 @@ test.describe('install and use Slaide offline', () => {
       buildValidSlaideFile('Offline import only'),
     )
     await triggerImport(page, importPath)
-    await expect(page.getByRole('link', { name: 'Offline import only' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Offline import only' })).toBeVisible()
 
     await context.setOffline(false)
   })
@@ -160,7 +160,7 @@ test.describe('install and use Slaide offline', () => {
     await triggerImport(page, filePath)
 
     await expect.poll(() => page.evaluate(() => window.__persistCalled?.() ?? false)).toBe(true)
-    await expect(page.getByRole('link', { name: 'Imported offline' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Imported offline' })).toBeVisible()
   })
 })
 
@@ -261,9 +261,6 @@ async function triggerImport(page: Page, filePath: string | null | undefined): P
     throw new Error('Import file path missing')
   }
   await page.locator('[data-testid="import-slaide-input"]').setInputFiles(filePath)
-  await expect(page.getByRole('button', { name: 'Import deck' })).toBeEnabled({
-    timeout: 15_000,
-  })
 }
 
 async function readSlideOrder(page: Page, deckId: string): Promise<string[]> {

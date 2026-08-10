@@ -1,20 +1,16 @@
-import { useEffect, useRef } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PREVIEW_CLOSE_DURATION_MS } from './constants.ts'
 
 export type SlidePreviewPanelState =
   | 'loading'
   | 'ready'
   | 'error'
-  | 'closing'
 
 type SlidePreviewPanelProps = {
   slideNumber: number
   state: SlidePreviewPanelState
   imageUrl: string | null
   onRetry: () => void
-  onCloseComplete: () => void
 }
 
 export function SlidePreviewPanel({
@@ -22,30 +18,10 @@ export function SlidePreviewPanel({
   state,
   imageUrl,
   onRetry,
-  onCloseComplete,
 }: SlidePreviewPanelProps) {
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (state !== 'closing') return
-
-    closeTimerRef.current = setTimeout(() => {
-      closeTimerRef.current = null
-      onCloseComplete()
-    }, PREVIEW_CLOSE_DURATION_MS)
-
-    return () => {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current)
-        closeTimerRef.current = null
-      }
-    }
-  }, [onCloseComplete, state])
-
   return (
     <div
-      className="pointer-events-none absolute inset-0 overflow-hidden rounded-md bg-card transition-opacity duration-200 ease-out motion-reduce:transition-none"
-      style={{ opacity: state === 'closing' ? 0 : 1 }}
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-md bg-card"
       data-testid="slide-preview-panel"
       data-preview-state={state}
       aria-label={`Preview for slide ${slideNumber}`}
@@ -67,7 +43,7 @@ export function SlidePreviewPanel({
           </Button>
         </div>
       ) : null}
-      {(state === 'ready' || state === 'closing') && imageUrl ? (
+      {state === 'ready' && imageUrl ? (
         <img
           src={imageUrl}
           alt={`Slide ${slideNumber} preview`}

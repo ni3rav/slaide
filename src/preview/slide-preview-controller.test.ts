@@ -25,23 +25,22 @@ describe('createSlidePreviewController', () => {
     expect(controller.getActiveUrlCount()).toBe(1)
   })
 
-  it('reuses the in-flight promise for concurrent loads', async () => {
-    let resolveRender: (blob: Blob) => void = () => undefined
-    const render = vi.fn(
-      () =>
-        new Promise<Blob>((resolve) => {
-          resolveRender = resolve
-        }),
-    )
+  it('supersedes an in-flight render when a fresh preview is requested', async () => {
+    const renderResolvers: Array<(blob: Blob) => void> = []
+    const render = vi.fn(() => new Promise<Blob>((resolve) => renderResolvers.push(resolve)))
     const controller = createSlidePreviewController(render)
 
     const first = controller.load(scene)
     const second = controller.load(scene)
-    expect(render).toHaveBeenCalledTimes(1)
+    expect(render).toHaveBeenCalledTimes(2)
 
-    resolveRender(new Blob(['png'], { type: 'image/png' }))
-    await expect(first).resolves.toMatch(/^blob:/)
+    renderResolvers[0]!(new Blob(['old'], { type: 'image/png' }))
+    await expect(first).rejects.toThrow(/superseded/i)
+    expect(controller.getActiveUrlCount()).toBe(0)
+
+    renderResolvers[1]!(new Blob(['new'], { type: 'image/png' }))
     await expect(second).resolves.toMatch(/^blob:/)
+    expect(controller.getActiveUrlCount()).toBe(1)
   })
 
   it('revokes the active object URL and clears state', async () => {
@@ -55,15 +54,16 @@ describe('createSlidePreviewController', () => {
     expect(controller.getActiveUrlCount()).toBe(0)
   })
 
-  it('allows a fresh load after revoke', async () => {
+  it('replaces the active preview for every new load', async () => {
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL')
     const render = vi.fn(async () => new Blob(['png'], { type: 'image/png' }))
     const controller = createSlidePreviewController(render)
 
     const first = await controller.load(scene)
-    controller.revoke()
     const second = await controller.load(scene)
 
     expect(render).toHaveBeenCalledTimes(2)
+    expect(revokeSpy).toHaveBeenCalledWith(first)
     expect(second).not.toBe(first)
     expect(controller.getActiveUrlCount()).toBe(1)
   })

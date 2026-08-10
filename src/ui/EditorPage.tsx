@@ -117,6 +117,13 @@ type SlaideTestApi = {
   getSceneElementCount: () => number;
   getCamera: () => { scrollX: number; scrollY: number; zoom: number };
   getViewport: () => { width: number; height: number };
+  getElementGeometry: () => Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
   setCamera: (camera: {
     scrollX?: number;
     scrollY?: number;
@@ -166,6 +173,7 @@ export function EditorPage() {
   const editSessionIdRef = useRef<number | null>(null);
   const takeoverCancelledRef = useRef(false);
   const excalidrawApiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const editorHostRef = useRef<HTMLDivElement | null>(null);
   const slideConstraintsRef = useRef<ReturnType<
     typeof createSlideConstraintController
   > | null>(null);
@@ -175,37 +183,50 @@ export function EditorPage() {
   const resolveSceneForPreview = useCallback(
     async (slide: Slide, isActive: boolean): Promise<Scene> => {
       if (isActive && state.status === "ok" && state.editMode === "editable") {
-        try {
-          await autosaveRef.current?.flush();
-        } catch {
-          // Fall back to the last mounted scene if flush fails.
-        }
-        const api = excalidrawApiRef.current;
-        if (api) {
-          return toPersistentScene(
-            api.getSceneElements(),
-            api.getAppState() as unknown as Record<string, unknown>,
-            api.getFiles() as unknown as Record<string, unknown>,
-          );
-        }
+        await autosaveRef.current?.flush();
       }
 
-      if (state.status === "ok") {
-        const stored = state.slides.find((entry) => entry.id === slide.id);
-        if (stored) return stored.scene;
+      if (!deckId) {
+        throw new Error("Deck is unavailable");
       }
 
-      return slide.scene;
+      const latest = await repository.loadDeck(deckId);
+      if (latest.status !== "ok") {
+        throw new Error("Deck is unavailable");
+      }
+      const stored = latest.slides.find((entry) => entry.id === slide.id);
+      if (!stored) {
+        throw new Error("Slide is unavailable");
+      }
+      return stored.scene;
     },
-    [state],
+    [deckId, repository, state],
   );
 
   const {
     session: previewSession,
     openPreview,
-    handleCloseComplete: handlePreviewCloseComplete,
+    clearPreview,
     retryPreview,
   } = useSlidePreview({ resolveScene: resolveSceneForPreview, theme });
+
+  useEffect(() => {
+    if (state.status !== "ok" || !editorHostRef.current) return;
+
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        slideConstraintsRef.current?.fitSlideToViewport();
+      });
+    });
+    observer.observe(editorHostRef.current);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [state.status]);
 
   useEffect(() => {
     themeFromAppRef.current = theme;
@@ -215,7 +236,7 @@ export function EditorPage() {
 
   useEffect(() => {
     if (state.status !== "ok") return;
-    if (!previewSession || previewSession.panelState === "closing") return;
+    if (!previewSession) return;
 
     const sessionSlideId = previewSession.slideId;
     const activeSlideId = state.activeSlide.id;
@@ -237,7 +258,8 @@ export function EditorPage() {
 
   useEffect(() => {
     setCheckedSlideIds(new Set());
-  }, [deckId]);
+    clearPreview();
+  }, [clearPreview, deckId]);
 
   useEffect(() => {
     if (!deckId) {
@@ -652,6 +674,13 @@ export function EditorPage() {
     setPresentStartDialogOpen(true);
   }
 
+  function handleSidebarToggle() {
+    if (sidebarOpen) {
+      clearPreview();
+    }
+    setSidebarOpen((open) => !open);
+  }
+
   async function handleExport(format: "pdf" | "slaide", exportTheme: DeckTheme) {
     if (state.status !== "ok" || !deckId || exporting) return;
     setExportFailureStage(null);
@@ -806,8 +835,7 @@ export function EditorPage() {
                       isDragging={activeDragSlideId === slide.id}
                       slideCount={state.slides.length}
                       isPreviewOpen={
-                        previewSession?.slideId === slide.id &&
-                        previewSession.panelState !== "closing"
+                        previewSession?.slideId === slide.id
                       }
                       previewSession={
                         previewSession?.slideId === slide.id
@@ -822,7 +850,6 @@ export function EditorPage() {
                       onPreviewRetry={() =>
                         retryPreview(slide, slide.id === state.activeSlide.id)
                       }
-                      onPreviewCloseComplete={handlePreviewCloseComplete}
                       onKeyboardReorder={(insertionIndex) =>
                         void commitSlideReorder(slide.id, insertionIndex)
                       }
@@ -869,7 +896,7 @@ export function EditorPage() {
               aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
               title={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
               aria-expanded={sidebarOpen}
-              onClick={() => setSidebarOpen((open) => !open)}
+              onClick={handleSidebarToggle}
             >
               {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
               <span className="sr-only">
@@ -1076,6 +1103,7 @@ export function EditorPage() {
         />
 
         <div
+          ref={editorHostRef}
           className="editor-canvas relative min-h-0 flex-1 bg-muted/30 [&_.excalidraw]:h-full"
           data-testid="excalidraw-host"
         >
@@ -1197,6 +1225,15 @@ export function EditorPage() {
                   const { width, height } = api.getAppState();
                   return { width, height };
                 },
+                getElementGeometry() {
+                  return api.getSceneElements().map((element) => ({
+                    id: element.id,
+                    x: element.x,
+                    y: element.y,
+                    width: element.width,
+                    height: element.height,
+                  }));
+                },
                 setCamera(camera) {
                   const current = api.getAppState();
                   api.updateScene({
@@ -1285,7 +1322,6 @@ type SortableSlideRowProps = {
   onToggleChecked: () => void;
   onTogglePreview: () => void;
   onPreviewRetry: () => void;
-  onPreviewCloseComplete: () => void;
   onKeyboardReorder: (insertionIndex: number) => void;
 };
 
@@ -1303,7 +1339,6 @@ function SortableSlideRow({
   onToggleChecked,
   onTogglePreview,
   onPreviewRetry,
-  onPreviewCloseComplete,
   onKeyboardReorder,
 }: SortableSlideRowProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform } =
@@ -1397,7 +1432,6 @@ function SortableSlideRow({
               state={previewSession.panelState}
               imageUrl={previewSession.imageUrl}
               onRetry={onPreviewRetry}
-              onCloseComplete={onPreviewCloseComplete}
             />
           ) : null}
         </div>
