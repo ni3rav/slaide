@@ -60,6 +60,8 @@ test.describe('install and use Slaide offline', () => {
     context,
   }) => {
     await gotoHome(page)
+    await waitForServiceWorker(page)
+
     await page.getByRole('button', { name: 'New deck' }).click()
     await expect(page).toHaveURL(/\/decks\/[0-9a-f-]{36}$/i)
     const editorUrl = page.url()
@@ -67,13 +69,15 @@ test.describe('install and use Slaide offline', () => {
     await page.waitForFunction(() => window.__slaideTest != null)
     await page.evaluate(() => window.__slaideTest!.addRectangle())
     await expect(page.getByTestId('save-status')).toHaveText('Saved', { timeout: 10_000 })
+    await waitForEditorAssetsCached(page)
 
-    await waitForServiceWorker(page)
     await context.setOffline(true)
     await page.reload()
 
     await expect(page).toHaveURL(editorUrl)
-    await expect(page.getByRole('heading', { name: 'Untitled deck' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Untitled deck' })).toBeVisible({
+      timeout: 15_000,
+    })
     await expect(page.getByTestId('excalidraw-host')).toBeVisible()
 
     await page.waitForFunction(() => window.__slaideTest != null)
@@ -91,6 +95,8 @@ test.describe('install and use Slaide offline', () => {
     await renameDeck(page, 'Offline deck')
 
     await page.getByRole('link', { name: 'Offline deck' }).click()
+    await expect(page.getByTestId('excalidraw-host')).toBeVisible()
+    await waitForEditorAssetsCached(page)
     await seedSceneWithImage(page, (await readSlideOrder(page, deckId))[0]!, deckId)
     await page.getByRole('link', { name: 'Home' }).click()
 
@@ -209,14 +215,48 @@ async function waitForServiceWorker(page: Page): Promise<void> {
     return registration != null
   })
 
-  const hasController = await page.evaluate(() => navigator.serviceWorker?.controller != null)
-  if (!hasController) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const hasController = await page.evaluate(
+      () => navigator.serviceWorker?.controller != null,
+    )
+    if (hasController) {
+      return
+    }
+
     await page.reload()
+    const ready = await page
+      .waitForFunction(() => navigator.serviceWorker?.controller != null, undefined, {
+        timeout: 15_000,
+      })
+      .then(() => true)
+      .catch(() => false)
+    if (ready) {
+      return
+    }
   }
 
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, undefined, {
     timeout: 30_000,
   })
+}
+
+async function waitForEditorAssetsCached(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => {
+          const cacheNames = await caches.keys()
+          const assetCache = cacheNames.find((name) => name.includes('slaide-asset'))
+          if (!assetCache) return false
+          const cache = await caches.open(assetCache)
+          const urls = (await cache.keys()).map((request) => request.url)
+          const hasEditorJs = urls.some((url) => url.includes('EditorPage') && url.endsWith('.js'))
+          const hasEditorCss = urls.some((url) => url.includes('EditorPage') && url.endsWith('.css'))
+          return hasEditorJs && hasEditorCss
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(true)
 }
 
 async function listServiceWorkerCacheUrls(page: Page): Promise<string[]> {
@@ -253,6 +293,9 @@ async function triggerHomeExport(page: Page, deckTitle: string) {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: `Export ${deckTitle}` }).click()
   await page.getByRole('menuitem', { name: 'Slaide' }).click()
+  const dialog = page.getByTestId('export-theme-dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Export' }).click()
   return downloadPromise
 }
 

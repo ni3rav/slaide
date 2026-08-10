@@ -87,7 +87,7 @@ export default defineConfig({
           {
             urlPattern: ({ url }) =>
               url.pathname.startsWith('/assets/') &&
-              url.pathname.endsWith('.js'),
+              (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')),
             handler: 'CacheFirst',
             options: {
               cacheName: 'slaide-asset-js',

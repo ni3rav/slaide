@@ -88,8 +88,11 @@ test.describe('delete slides safely', () => {
       'true',
     )
 
+    await expect
+      .poll(async () => (await readSlideOrder(page, deckId))[0] ?? null)
+      .not.toBe(originalSlideId)
+
     const replacementSlideId = (await readSlideOrder(page, deckId))[0]!
-    expect(replacementSlideId).not.toBe(originalSlideId)
     expect((await readStoredScene(page, replacementSlideId)).elements).toHaveLength(0)
     expect(await slideExists(page, originalSlideId)).toBe(false)
   })
