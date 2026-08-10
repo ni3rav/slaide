@@ -85,6 +85,7 @@ test.describe('duplicate and swap slides', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
 
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 

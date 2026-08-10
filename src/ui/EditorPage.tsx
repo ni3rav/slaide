@@ -239,8 +239,20 @@ export function EditorPage() {
     };
   }, [state.status]);
 
+  const sidebarFitReadyRef = useRef(false);
+
   useEffect(() => {
-    if (state.status !== "ok") return;
+    if (state.status !== "ok") {
+      sidebarFitReadyRef.current = false;
+      return;
+    }
+
+    // Skip the initial mount fit burst — ResizeObserver handles first layout.
+    // Only keep refitting across sidebar open/close while Excalidraw catches up.
+    if (!sidebarFitReadyRef.current) {
+      sidebarFitReadyRef.current = true;
+      return;
+    }
 
     const startedAt = Date.now();
     const timer = window.setInterval(() => {
