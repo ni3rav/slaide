@@ -795,41 +795,51 @@ export function EditorPage() {
     <main className="m-0 flex h-svh max-w-none flex-row overflow-hidden bg-background p-0">
       {sidebarOpen ? (
         <aside
-          className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/20"
+          className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
           aria-label="Slides"
           aria-busy={isSlideReordering}
           data-reordering={isSlideReordering ? "true" : "false"}
         >
-          <div className="flex shrink-0 flex-col gap-2 border-b border-border px-2.5 py-2">
-            <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                aria-expanded={true}
-                onClick={handleSidebarToggle}
-              >
-                <PanelLeftClose />
-                <span className="sr-only">Collapse sidebar</span>
-              </Button>
-              <Button type="button" variant="ghost" size="icon-sm" asChild>
-                <Link
-                  to="/"
-                  aria-label="Home"
-                  title="Home"
-                  onClick={(event) => void handleHomeClick(event)}
+          <div className="flex shrink-0 flex-col gap-2.5 border-b border-sidebar-border px-2.5 pb-2.5 pt-2">
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  aria-expanded={true}
+                  onClick={handleSidebarToggle}
                 >
-                  <Home />
-                  <span className="sr-only">Home</span>
-                </Link>
-              </Button>
+                  <PanelLeftClose />
+                  <span className="sr-only">Collapse sidebar</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  asChild
+                >
+                  <Link
+                    to="/"
+                    aria-label="Home"
+                    title="Home"
+                    onClick={(event) => void handleHomeClick(event)}
+                  >
+                    <Home />
+                    <span className="sr-only">Home</span>
+                  </Link>
+                </Button>
+              </div>
               <div className="ml-auto flex items-center gap-0.5">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
+                  className="text-muted-foreground"
                   aria-label="Present"
                   title="Present"
                   onClick={() => handlePresentClick()}
@@ -843,6 +853,7 @@ export function EditorPage() {
                       type="button"
                       variant="ghost"
                       size="icon-sm"
+                      className="text-muted-foreground"
                       aria-label={exporting ? "Exporting deck" : "Export deck"}
                       title={exporting ? "Exporting deck" : "Export deck"}
                       disabled={exporting}
@@ -880,30 +891,36 @@ export function EditorPage() {
               <h1 className="m-0 truncate text-sm font-semibold leading-tight tracking-tight">
                 {state.deck.title}
               </h1>
-              <div className="flex items-center justify-between gap-2">
-                <p className="m-0 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <p className="m-0 min-w-0 truncate">
                   Slide {activeSlideIndex + 1} of {state.slides.length}
                 </p>
                 {isReadOnly ? null : (
-                  <p
-                    role="status"
-                    aria-live="polite"
-                    className={`m-0 text-[11px] tabular-nums ${
-                      saveStatus === "failed"
-                        ? "font-medium text-destructive"
-                        : "text-muted-foreground"
-                    }`}
-                    data-testid="save-status"
-                  >
-                    {formatSaveStatus(saveStatus)}
-                  </p>
+                  <>
+                    <span
+                      className="size-0.5 shrink-0 rounded-full bg-border"
+                      aria-hidden="true"
+                    />
+                    <p
+                      role="status"
+                      aria-live="polite"
+                      className={`m-0 shrink-0 tabular-nums ${
+                        saveStatus === "failed"
+                          ? "font-medium text-destructive"
+                          : ""
+                      }`}
+                      data-testid="save-status"
+                    >
+                      {formatSaveStatus(saveStatus)}
+                    </p>
+                  </>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
-            <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+          <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-2.5 pt-2">
+            <span className="px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
               Slides
             </span>
             <div className="flex items-center gap-0.5">
@@ -911,6 +928,7 @@ export function EditorPage() {
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                className="text-muted-foreground"
                 disabled={isReadOnly}
                 aria-label="Add slide"
                 title="Add slide"
@@ -925,6 +943,7 @@ export function EditorPage() {
                     type="button"
                     variant="ghost"
                     size="icon-sm"
+                    className="text-muted-foreground"
                     aria-label="Duplicate"
                     title="Duplicate selected slides"
                     onClick={() => void handleDuplicateSlides()}
@@ -936,6 +955,7 @@ export function EditorPage() {
                     type="button"
                     variant="ghost"
                     size="icon-sm"
+                    className="text-muted-foreground"
                     aria-label="Swap"
                     title="Swap selected slides"
                     disabled={checkedSlideIds.size !== 2}
@@ -961,7 +981,7 @@ export function EditorPage() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
             <DndContext
               sensors={slideSensors}
               onDragStart={handleSlideDragStart}
@@ -969,7 +989,7 @@ export function EditorPage() {
               onDragEnd={(event) => void handleSlideDragEnd(event)}
               onDragCancel={handleSlideDragCancel}
             >
-              <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
+              <ol className="m-0 flex list-none flex-col gap-1 p-0">
                 {state.slides.map((slide, index) => (
                   <Fragment key={slide.id}>
                     <SlideInsertionIndicator
@@ -1033,7 +1053,7 @@ export function EditorPage() {
           </div>
 
           {!isReadOnly ? (
-            <div className="shrink-0 border-t border-border px-2.5 py-2">
+            <div className="shrink-0 border-t border-sidebar-border px-2.5 py-2.5">
               <EditorDrawingTools
                 activeTool={activeTool}
                 zoomPercent={zoomPercent}
@@ -1058,13 +1078,14 @@ export function EditorPage() {
         </aside>
       ) : (
         <aside
-          className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-border bg-muted/20 py-2"
+          className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-2 text-sidebar-foreground"
           aria-label="Editor controls"
         >
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
+            className="text-muted-foreground"
             aria-label="Open sidebar"
             title="Open sidebar"
             aria-expanded={false}
@@ -1073,7 +1094,13 @@ export function EditorPage() {
             <PanelLeftOpen />
             <span className="sr-only">Open sidebar</span>
           </Button>
-          <Button type="button" variant="ghost" size="icon-sm" asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            asChild
+          >
             <Link
               to="/"
               aria-label="Home"
@@ -1453,12 +1480,12 @@ function SortableSlideRow({
       className="group flex flex-col gap-0"
       data-slide-id={slide.id}
     >
-      <div className="flex items-start gap-1.5">
-        <div className="flex w-5 shrink-0 flex-col items-center gap-1 pt-1">
+      <div className="flex items-center gap-1.5">
+        <div className="flex w-5 shrink-0 flex-col items-center gap-0.5">
           <button
             type="button"
             ref={setActivatorNodeRef}
-            className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-30"
+            className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30"
             aria-label={`Reorder slide ${index + 1}`}
             disabled={isReadOnly}
             onClick={(event) => event.preventDefault()}
@@ -1492,7 +1519,7 @@ function SortableSlideRow({
           />
           <button
             type="button"
-            className="inline-flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-30"
+            className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30"
             aria-label={`Preview slide ${index + 1}`}
             aria-expanded={isPreviewOpen}
             disabled={isReadOnly}
@@ -1508,15 +1535,15 @@ function SortableSlideRow({
           <Button
             type="button"
             variant="outline"
-            className={`h-auto w-full flex-col gap-0 overflow-hidden rounded-md border p-0 shadow-none ${
+            className={`h-auto w-full flex-col gap-0 overflow-hidden rounded-md border bg-card p-0 shadow-none ${
               isActive
-                ? "border-primary ring-2 ring-primary/30"
-                : "border-border hover:border-foreground/25"
+                ? "border-primary ring-2 ring-primary/25"
+                : "border-border hover:border-foreground/20"
             }`}
             aria-current={isActive ? "true" : undefined}
             onClick={onSelect}
           >
-            <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
+            <span className="flex aspect-video w-full items-center justify-center bg-card text-xs font-medium tabular-nums text-muted-foreground">
               {index + 1}
             </span>
           </Button>
@@ -1545,8 +1572,8 @@ function SlideRowPreview({
 }) {
   return (
     <div className="flex w-44 flex-col gap-0 rounded-md bg-background p-1 shadow-md">
-      <div className="flex items-start gap-1.5">
-        <div className="flex w-5 shrink-0 flex-col items-center gap-1 pt-1">
+      <div className="flex items-center gap-1.5">
+        <div className="flex w-5 shrink-0 flex-col items-center gap-0.5">
           <span className="inline-flex size-5 items-center justify-center text-muted-foreground">
             <GripVertical className="size-3.5" aria-hidden="true" />
           </span>
@@ -1563,11 +1590,11 @@ function SlideRowPreview({
           </span>
         </div>
         <div
-          className={`min-w-0 flex-1 overflow-hidden rounded-md border ${
-            isActive ? "border-primary ring-2 ring-primary/30" : "border-border"
+          className={`min-w-0 flex-1 overflow-hidden rounded-md border bg-card ${
+            isActive ? "border-primary ring-2 ring-primary/25" : "border-border"
           }`}
         >
-          <span className="flex aspect-video w-full items-center justify-center bg-card text-sm font-medium tabular-nums text-muted-foreground">
+          <span className="flex aspect-video w-full items-center justify-center bg-card text-xs font-medium tabular-nums text-muted-foreground">
             {index + 1}
           </span>
         </div>

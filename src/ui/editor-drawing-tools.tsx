@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import {
+  ArrowUpRight,
   Circle,
   Diamond,
   Eraser,
@@ -38,7 +39,7 @@ type ToolDefinition = {
   icon: ReactNode
 }
 
-const TOOLS: ToolDefinition[] = [
+const NAV_TOOLS: ToolDefinition[] = [
   {
     type: 'selection',
     label: 'Selection',
@@ -51,6 +52,9 @@ const TOOLS: ToolDefinition[] = [
     testId: 'editor-tool-hand',
     icon: <Hand />,
   },
+]
+
+const SHAPE_TOOLS: ToolDefinition[] = [
   {
     type: 'rectangle',
     label: 'Rectangle',
@@ -73,18 +77,7 @@ const TOOLS: ToolDefinition[] = [
     type: 'arrow',
     label: 'Arrow',
     testId: 'editor-tool-arrow',
-    icon: (
-      <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
-        <path
-          d="M5 19 19 5M19 5h-6M19 5v6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
+    icon: <ArrowUpRight />,
   },
   {
     type: 'line',
@@ -92,6 +85,9 @@ const TOOLS: ToolDefinition[] = [
     testId: 'editor-tool-line',
     icon: <Minus />,
   },
+]
+
+const MARKUP_TOOLS: ToolDefinition[] = [
   {
     type: 'freedraw',
     label: 'Draw',
@@ -130,6 +126,68 @@ type EditorDrawingToolsProps = {
   zoomPercent: number
 }
 
+function ToolButton({
+  tool,
+  isActive,
+  disabled,
+  onSelectTool,
+}: {
+  tool: ToolDefinition
+  isActive: boolean
+  disabled: boolean
+  onSelectTool: (tool: DrawingToolType) => void
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      data-testid={tool.testId}
+      aria-label={tool.label}
+      title={tool.label}
+      aria-pressed={isActive}
+      disabled={disabled}
+      className={cn(
+        'size-7 text-muted-foreground hover:bg-background hover:text-foreground',
+        isActive &&
+          'bg-background text-foreground shadow-xs ring-1 ring-border',
+      )}
+      onClick={() => onSelectTool(tool.type)}
+    >
+      {tool.icon}
+      <span className="sr-only">{tool.label}</span>
+    </Button>
+  )
+}
+
+function ToolGroup({
+  tools,
+  activeTool,
+  disabled,
+  onSelectTool,
+  label,
+}: {
+  tools: ToolDefinition[]
+  activeTool: string
+  disabled: boolean
+  onSelectTool: (tool: DrawingToolType) => void
+  label: string
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap gap-0.5">
+      {tools.map((tool) => (
+        <ToolButton
+          key={tool.type}
+          tool={tool}
+          isActive={activeTool === tool.type}
+          disabled={disabled}
+          onSelectTool={onSelectTool}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function EditorDrawingTools({
   activeTool,
   disabled = false,
@@ -142,51 +200,50 @@ export function EditorDrawingTools({
   zoomPercent,
 }: EditorDrawingToolsProps) {
   return (
-    <div className="flex flex-col gap-2.5">
-      <section aria-label="Drawing tools" className="flex flex-col gap-1">
-        <p className="m-0 px-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+    <div className="flex flex-col gap-2">
+      <section aria-label="Drawing tools" className="flex flex-col gap-1.5">
+        <p className="m-0 px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
           Tools
         </p>
-        <div className="grid grid-cols-4 gap-0.5">
-          {TOOLS.map((tool) => {
-            const isActive = activeTool === tool.type
-            return (
-              <Button
-                key={tool.type}
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                data-testid={tool.testId}
-                aria-label={tool.label}
-                title={tool.label}
-                aria-pressed={isActive}
-                disabled={disabled}
-                className={cn(
-                  'size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
-                  isActive && 'bg-accent text-foreground ring-1 ring-border',
-                )}
-                onClick={() => onSelectTool(tool.type)}
-              >
-                {tool.icon}
-                <span className="sr-only">{tool.label}</span>
-              </Button>
-            )
-          })}
+        <div className="rounded-lg border border-border/80 bg-muted/40 p-1">
+          <div className="flex flex-col gap-1">
+            <ToolGroup
+              tools={NAV_TOOLS}
+              activeTool={activeTool}
+              disabled={disabled}
+              onSelectTool={onSelectTool}
+              label="Navigation tools"
+            />
+            <div className="h-px bg-border/70" aria-hidden="true" />
+            <ToolGroup
+              tools={SHAPE_TOOLS}
+              activeTool={activeTool}
+              disabled={disabled}
+              onSelectTool={onSelectTool}
+              label="Shape tools"
+            />
+            <div className="h-px bg-border/70" aria-hidden="true" />
+            <ToolGroup
+              tools={MARKUP_TOOLS}
+              activeTool={activeTool}
+              disabled={disabled}
+              onSelectTool={onSelectTool}
+              label="Markup tools"
+            />
+          </div>
         </div>
       </section>
 
-      <div className="h-px bg-border" aria-hidden="true" />
-
-      <section aria-label="History" className="flex flex-col gap-1">
-        <p className="m-0 px-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-          History
-        </p>
-        <div className="flex gap-0.5">
+      <section
+        aria-label="Canvas controls"
+        className="flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1"
+      >
+        <div role="group" aria-label="History" className="flex gap-0.5">
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
             aria-label="Undo"
             title="Undo"
             disabled={disabled}
@@ -199,7 +256,7 @@ export function EditorDrawingTools({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
             aria-label="Redo"
             title="Redo"
             disabled={disabled}
@@ -209,20 +266,19 @@ export function EditorDrawingTools({
             <span className="sr-only">Redo</span>
           </Button>
         </div>
-      </section>
 
-      <div className="h-px bg-border" aria-hidden="true" />
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
 
-      <section aria-label="Zoom" className="flex flex-col gap-1">
-        <p className="m-0 px-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-          Zoom
-        </p>
-        <div className="flex items-center gap-0.5">
+        <div
+          role="group"
+          aria-label="Zoom"
+          className="flex min-w-0 flex-1 items-center gap-0.5"
+        >
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
             aria-label="Zoom out"
             title="Zoom out"
             onClick={onZoomOut}
@@ -232,7 +288,7 @@ export function EditorDrawingTools({
           </Button>
           <button
             type="button"
-            className="m-0 min-w-10 flex-1 rounded-md px-1 py-1.5 text-center text-[11px] tabular-nums text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="m-0 min-w-0 flex-1 rounded-md px-1 py-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Reset zoom"
             title="Reset zoom"
             onClick={onResetZoom}
@@ -243,7 +299,7 @@ export function EditorDrawingTools({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
             aria-label="Zoom in"
             title="Zoom in"
             onClick={onZoomIn}
