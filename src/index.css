@@ -217,7 +217,14 @@
 
 .editor-canvas .App-toolbar__extra-tools-trigger,
 .editor-canvas .default-sidebar-trigger {
+  /* Library opens from the app left toolbar; keep Excalidraw's native
+     library trigger out of the canvas chrome. */
   display: none !important;
+}
+
+/* Excalidraw DefaultSidebar docks on the right of the canvas. */
+.editor-canvas .sidebar {
+  pointer-events: auto;
 }
 
 /* Tools, undo/redo, and zoom live in the app sidebar. Keep Excalidraw
