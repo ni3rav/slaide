@@ -225,6 +225,10 @@ export function EditorPage() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         slideConstraintsRef.current?.fitSlideToViewport();
+        const api = excalidrawApiRef.current;
+        if (api) {
+          setZoomPercent(Math.round(api.getAppState().zoom.value * 100));
+        }
       });
     });
     observer.observe(editorHostRef.current);
@@ -234,6 +238,28 @@ export function EditorPage() {
       observer.disconnect();
     };
   }, [state.status]);
+
+  useEffect(() => {
+    if (state.status !== "ok") return;
+
+    const fit = () => {
+      slideConstraintsRef.current?.fitSlideToViewport();
+      const api = excalidrawApiRef.current;
+      if (api) {
+        setZoomPercent(Math.round(api.getAppState().zoom.value * 100));
+      }
+    };
+
+    // Excalidraw updates viewport size after layout; retry briefly so reopen
+    // restores the fitted camera instead of keeping the collapsed zoom.
+    const timers = [0, 32, 80, 160].map((ms) => window.setTimeout(fit, ms));
+
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [sidebarOpen, state.status]);
 
   useEffect(() => {
     themeFromAppRef.current = theme;
