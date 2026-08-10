@@ -106,5 +106,8 @@ async function openEditor(page: Page): Promise<void> {
 async function focusCanvas(page: Page): Promise<void> {
   const canvas = page.locator('.excalidraw .excalidraw__canvas.interactive')
   await expect(canvas).toBeVisible()
-  await canvas.click({ position: { x: 40, y: 40 } })
+  const box = await canvas.boundingBox()
+  expect(box).toBeTruthy()
+  // Avoid the top-left Excalidraw chrome overlay (hamburger / properties).
+  await page.mouse.click(box!.x + box!.width * 0.55, box!.y + box!.height * 0.55)
 }
