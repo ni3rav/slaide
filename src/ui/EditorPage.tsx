@@ -773,7 +773,8 @@ export function EditorPage() {
   function handleToggleLibrary() {
     const api = excalidrawApiRef.current;
     if (!api || isReadOnlyTooling()) return;
-    api.toggleSidebar({ name: "default" });
+    // Pass tab so open/close both match Excalidraw's toggleSidebar contract.
+    api.toggleSidebar({ name: "default", tab: "library" });
   }
 
   function handleLibraryChange(nextItems: LibraryItems) {

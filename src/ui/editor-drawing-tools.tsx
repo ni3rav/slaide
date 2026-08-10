@@ -247,7 +247,9 @@ export function EditorDrawingTools({
                 aria-pressed={libraryOpen}
                 disabled={disabled}
                 className={cn(
-                  'size-7 text-muted-foreground hover:bg-background hover:text-foreground',
+                  // Excalidraw Sidebar outside-click ignores .sidebar-trigger so
+                  // our toggle can close the panel instead of racing a reopen.
+                  'sidebar-trigger size-7 text-muted-foreground hover:bg-background hover:text-foreground',
                   libraryOpen &&
                     'bg-background text-foreground shadow-xs ring-1 ring-border',
                 )}

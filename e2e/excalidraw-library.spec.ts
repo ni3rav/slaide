@@ -37,6 +37,7 @@ test.describe('excalidraw library', () => {
       'aria-pressed',
       'false',
     )
+    await expect(sidebar).toBeHidden()
   })
 
   test('persists library items in IndexedDB across reload', async ({ page }) => {
