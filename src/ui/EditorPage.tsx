@@ -475,11 +475,12 @@ export function EditorPage() {
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      autosaveRef.current = null;
-      slideConstraintsRef.current?.dispose();
-      slideConstraintsRef.current = null;
-      excalidrawApiRef.current = null;
-      delete window.__slaideTest;
+      // Only detach this effect's autosave. Excalidraw remounts on slide change
+      // during the same render commit and may have already replaced the API /
+      // test hooks / constraints — clearing those here races the new instance.
+      if (autosaveRef.current === autosave) {
+        autosaveRef.current = null;
+      }
       void autosave
         .flush()
         .catch(() => undefined)
@@ -491,6 +492,15 @@ export function EditorPage() {
     state.status === "ok" ? state.activeSlide.id : null,
     state.status === "ok" ? state.editMode : null,
   ]);
+
+  useEffect(() => {
+    return () => {
+      slideConstraintsRef.current?.dispose();
+      slideConstraintsRef.current = null;
+      excalidrawApiRef.current = null;
+      delete window.__slaideTest;
+    };
+  }, []);
 
   async function flushActiveScene(): Promise<boolean> {
     try {
