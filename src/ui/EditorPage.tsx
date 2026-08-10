@@ -22,11 +22,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Excalidraw,
+  DefaultSidebar,
   MainMenu,
   convertToExcalidrawElements,
   newElementWith,
 } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type {
+  ExcalidrawImperativeAPI,
+  LibraryItems,
+} from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import {
   ArrowLeftRight,
@@ -49,6 +53,7 @@ import { useSlidePreview } from "../preview/use-slide-preview.ts";
 import type { SlidePreviewSession } from "../preview/use-slide-preview.ts";
 import type { Scene } from "../storage/deck-repository.ts";
 import { useDeckRepository } from "../storage/deck-repository-context.tsx";
+import { createLibraryRepository } from "../storage/library-repository.ts";
 import type { Deck, Slide } from "../storage/deck-repository.ts";
 import {
   closeDeckEditSessionNow,
@@ -137,6 +142,7 @@ type SlaideTestApi = {
     zoom?: number;
   }) => void;
   getStoredElementsInsideSlide: () => boolean;
+  updateLibraryItems: (items: LibraryItems) => Promise<void>;
 };
 
 declare global {
@@ -175,6 +181,12 @@ export function EditorPage() {
   >(null);
   const [activeTool, setActiveTool] = useState<string>("selection");
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [libraryItems, setLibraryItems] = useState<LibraryItems>([]);
+  const [libraryReady, setLibraryReady] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryRepositoryRef = useRef<Awaited<
+    ReturnType<typeof createLibraryRepository>
+  > | null>(null);
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(
     null,
   );
@@ -311,6 +323,29 @@ export function EditorPage() {
   }, [clearPreview, deckId]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    void createLibraryRepository().then(async (repository) => {
+      if (cancelled) {
+        await repository.dispose();
+        return;
+      }
+      libraryRepositoryRef.current = repository;
+      const items = await repository.getLibraryItems();
+      if (cancelled) return;
+      setLibraryItems(items);
+      setLibraryReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      const repository = libraryRepositoryRef.current;
+      libraryRepositoryRef.current = null;
+      void repository?.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!deckId) {
       setState({ status: "unavailable", reason: "missing" });
       return;
@@ -442,11 +477,12 @@ export function EditorPage() {
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      autosaveRef.current = null;
-      slideConstraintsRef.current?.dispose();
-      slideConstraintsRef.current = null;
-      excalidrawApiRef.current = null;
-      delete window.__slaideTest;
+      // Only detach this effect's autosave. Excalidraw remounts on slide change
+      // during the same render commit and may have already replaced the API /
+      // test hooks / constraints — clearing those here races the new instance.
+      if (autosaveRef.current === autosave) {
+        autosaveRef.current = null;
+      }
       void autosave
         .flush()
         .catch(() => undefined)
@@ -458,6 +494,15 @@ export function EditorPage() {
     state.status === "ok" ? state.activeSlide.id : null,
     state.status === "ok" ? state.editMode : null,
   ]);
+
+  useEffect(() => {
+    return () => {
+      slideConstraintsRef.current?.dispose();
+      slideConstraintsRef.current = null;
+      excalidrawApiRef.current = null;
+      delete window.__slaideTest;
+    };
+  }, []);
 
   async function flushActiveScene(): Promise<boolean> {
     try {
@@ -737,6 +782,18 @@ export function EditorPage() {
     setActiveTool(tool);
   }
 
+  function handleToggleLibrary() {
+    const api = excalidrawApiRef.current;
+    if (!api || isReadOnlyTooling()) return;
+    // Pass tab so open/close both match Excalidraw's toggleSidebar contract.
+    api.toggleSidebar({ name: "default", tab: "library" });
+  }
+
+  function handleLibraryChange(nextItems: LibraryItems) {
+    setLibraryItems(nextItems);
+    void libraryRepositoryRef.current?.setLibraryItems(nextItems);
+  }
+
   function isReadOnlyTooling(): boolean {
     return state.status !== "ok" || state.editMode === "readonly";
   }
@@ -804,7 +861,7 @@ export function EditorPage() {
     }
   }
 
-  if (state.status === "loading") {
+  if (state.status === "loading" || !libraryReady) {
     return (
       <main className="p-6">
         <p className="text-muted-foreground">Loading deck…</p>
@@ -921,9 +978,11 @@ export function EditorPage() {
             <section className="shrink-0 border-b border-sidebar-border px-2.5 py-2.5">
               <EditorDrawingTools
                 activeTool={activeTool}
+                libraryOpen={libraryOpen}
                 zoomPercent={zoomPercent}
                 disabled={isReadOnlyTooling()}
                 onSelectTool={handleSelectTool}
+                onToggleLibrary={handleToggleLibrary}
                 onUndo={() => {
                   clickExcalidrawControl("button-undo");
                 }}
@@ -1231,6 +1290,7 @@ export function EditorPage() {
                 showWelcomeScreen: false,
               },
               files: initialScene.files as never,
+              libraryItems,
             }}
             viewModeEnabled={isReadOnly}
             UIOptions={{
@@ -1252,6 +1312,7 @@ export function EditorPage() {
             }}
             aiEnabled={false}
             validateEmbeddable={false}
+            onLibraryChange={handleLibraryChange}
             onLinkOpen={(element, event) => {
               event.preventDefault();
               if (element.link) {
@@ -1381,6 +1442,12 @@ export function EditorPage() {
                 getStoredElementsInsideSlide() {
                   return allElementsInsideSlide(api.getSceneElements());
                 },
+                async updateLibraryItems(items) {
+                  await api.updateLibrary({
+                    libraryItems: items,
+                    merge: false,
+                  });
+                },
               };
             }}
             onDuplicate={(nextElements, previousElements) =>
@@ -1395,6 +1462,7 @@ export function EditorPage() {
               if (typeof toolType === "string") {
                 setActiveTool(toolType);
               }
+              setLibraryOpen(appState.openSidebar?.name === "default");
               setZoomPercent(Math.round(appState.zoom.value * 100));
               const nextTheme = appState.theme;
               if (nextTheme === "light" || nextTheme === "dark") {
@@ -1426,6 +1494,7 @@ export function EditorPage() {
                 <MainMenu.DefaultItems.ChangeCanvasBackground />
               ) : null}
             </MainMenu>
+            <DefaultSidebar />
           </Excalidraw>
           <button
             type="button"

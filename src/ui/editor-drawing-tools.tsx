@@ -6,6 +6,7 @@ import {
   Eraser,
   Hand,
   ImageIcon,
+  Library,
   Minus,
   MousePointer2,
   Pencil,
@@ -127,7 +128,9 @@ const MARKUP_TOOLS: ToolDefinition[] = [
 type EditorDrawingToolsProps = {
   activeTool: string
   disabled?: boolean
+  libraryOpen?: boolean
   onSelectTool: (tool: DrawingToolType) => void
+  onToggleLibrary: () => void
   onUndo: () => void
   onRedo: () => void
   onZoomIn: () => void
@@ -203,7 +206,9 @@ function ToolGroup({
 export function EditorDrawingTools({
   activeTool,
   disabled = false,
+  libraryOpen = false,
   onSelectTool,
+  onToggleLibrary,
   onUndo,
   onRedo,
   onZoomIn,
@@ -242,6 +247,30 @@ export function EditorDrawingTools({
               onSelectTool={onSelectTool}
               label="Markup tools"
             />
+            <div className="h-px bg-border/70" aria-hidden="true" />
+            <div role="group" aria-label="Library tools" className="flex flex-wrap gap-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                data-testid="editor-tool-library"
+                aria-label="Library"
+                title="Library"
+                aria-pressed={libraryOpen}
+                disabled={disabled}
+                className={cn(
+                  // Excalidraw Sidebar outside-click ignores .sidebar-trigger so
+                  // our toggle can close the panel instead of racing a reopen.
+                  'sidebar-trigger size-7 text-muted-foreground hover:bg-background hover:text-foreground',
+                  libraryOpen &&
+                    'bg-background text-foreground shadow-xs ring-1 ring-border',
+                )}
+                onClick={onToggleLibrary}
+              >
+                <Library />
+                <span className="sr-only">Library</span>
+              </Button>
+            </div>
           </div>
         </div>
       </section>
