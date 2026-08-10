@@ -8,7 +8,7 @@ export function fitSlideFrame(api: ExcalidrawImperativeAPI): void {
   const { appState: fitted } = zoomToFitBounds({
     bounds: [...SLIDE_BOUNDS],
     appState,
-    fitToViewport: true,
+    fit: 'contain',
   })
   api.updateScene({ appState: fitted })
 }

@@ -10,6 +10,7 @@ import {
   MousePointer2,
   Pencil,
   Redo2,
+  Shapes,
   Square,
   Type,
   Undo2,
@@ -28,6 +29,7 @@ export type DrawingToolType =
   | 'arrow'
   | 'line'
   | 'freedraw'
+  | 'autoshape'
   | 'text'
   | 'image'
   | 'eraser'
@@ -37,6 +39,7 @@ type ToolDefinition = {
   label: string
   testId: string
   icon: ReactNode
+  shortcut?: string
 }
 
 const NAV_TOOLS: ToolDefinition[] = [
@@ -95,6 +98,13 @@ const MARKUP_TOOLS: ToolDefinition[] = [
     icon: <Pencil />,
   },
   {
+    type: 'autoshape',
+    label: 'Draw to shape',
+    shortcut: 'Shift+X',
+    testId: 'editor-tool-autoshape',
+    icon: <Shapes />,
+  },
+  {
     type: 'text',
     label: 'Text',
     testId: 'editor-tool-text',
@@ -137,6 +147,7 @@ function ToolButton({
   disabled: boolean
   onSelectTool: (tool: DrawingToolType) => void
 }) {
+  const title = tool.shortcut ? `${tool.label} (${tool.shortcut})` : tool.label
   return (
     <Button
       type="button"
@@ -144,7 +155,8 @@ function ToolButton({
       size="icon-sm"
       data-testid={tool.testId}
       aria-label={tool.label}
-      title={tool.label}
+      title={title}
+      aria-keyshortcuts={tool.shortcut}
       aria-pressed={isActive}
       disabled={disabled}
       className={cn(
@@ -155,7 +167,7 @@ function ToolButton({
       onClick={() => onSelectTool(tool.type)}
     >
       {tool.icon}
-      <span className="sr-only">{tool.label}</span>
+      <span className="sr-only">{title}</span>
     </Button>
   )
 }
