@@ -242,22 +242,24 @@ export function EditorPage() {
   useEffect(() => {
     if (state.status !== "ok") return;
 
-    const fit = () => {
-      slideConstraintsRef.current?.fitSlideToViewport();
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
       const api = excalidrawApiRef.current;
-      if (api) {
+      const host = editorHostRef.current;
+      if (!api || !host) return;
+
+      if (Math.abs(api.getAppState().width - host.clientWidth) < 1) {
+        slideConstraintsRef.current?.fitSlideToViewport();
         setZoomPercent(Math.round(api.getAppState().zoom.value * 100));
       }
-    };
 
-    // Excalidraw updates viewport size after layout; retry briefly so reopen
-    // restores the fitted camera instead of keeping the collapsed zoom.
-    const timers = [0, 32, 80, 160].map((ms) => window.setTimeout(fit, ms));
+      if (Date.now() - startedAt > 500) {
+        window.clearInterval(timer);
+      }
+    }, 16);
 
     return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer);
-      }
+      window.clearInterval(timer);
     };
   }, [sidebarOpen, state.status]);
 

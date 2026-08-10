@@ -118,16 +118,31 @@ test.describe('constrain the fixed slide', () => {
 
     const before = await readBoardState(page)
     await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-    await expect.poll(() => readViewportWidth(page)).toBeGreaterThan(before.viewport.width)
+    await expect
+      .poll(async () => {
+        const state = await readBoardState(page)
+        return {
+          wider: state.viewport.width > before.viewport.width,
+          fitted: Math.abs(state.camera.zoom - state.fitZoom) < 1e-5,
+        }
+      })
+      .toEqual({ wider: true, fitted: true })
 
     const collapsed = await readBoardState(page)
     expect(collapsed.elements).toEqual(before.elements)
     expect(collapsed.camera.zoom).toBeGreaterThan(before.camera.zoom)
-    expect(collapsed.camera.zoom).toBeCloseTo(collapsed.fitZoom, 5)
     expect(collapsed.center).toEqual(before.center)
 
     await page.getByRole('button', { name: 'Open sidebar' }).click()
-    await expect.poll(() => readViewportWidth(page)).toBe(before.viewport.width)
+    await expect
+      .poll(async () => {
+        const state = await readBoardState(page)
+        return {
+          width: state.viewport.width,
+          fitted: Math.abs(state.camera.zoom - state.fitZoom) < 1e-5,
+        }
+      })
+      .toEqual({ width: before.viewport.width, fitted: true })
 
     const reopened = await readBoardState(page)
     expect(reopened.elements).toEqual(before.elements)
