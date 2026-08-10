@@ -249,9 +249,15 @@
 
 .editor-canvas .App-menu_top {
   justify-content: flex-start;
+  padding-top: 0.5rem;
+  padding-left: 0.5rem;
 }
 
 .editor-canvas .Island.App-menu__left,
 .editor-canvas .selected-shape-actions {
   max-width: min(220px, 40vw);
+  border-radius: 0.5rem !important;
+  box-shadow:
+    0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
+    0 8px 24px color-mix(in oklch, var(--foreground) 6%, transparent) !important;
 }
