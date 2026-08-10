@@ -810,19 +810,6 @@ export function EditorPage() {
                 variant="ghost"
                 size="sm"
                 className="h-8 justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                aria-expanded={true}
-                onClick={handleSidebarToggle}
-              >
-                <PanelLeftClose />
-                Collapse
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
                 asChild
               >
                 <Link
@@ -1083,43 +1070,7 @@ export function EditorPage() {
             </div>
           </section>
         </aside>
-      ) : (
-        <aside
-          className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-2 text-sidebar-foreground"
-          aria-label="Editor controls"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            aria-label="Open sidebar"
-            title="Open sidebar"
-            aria-expanded={false}
-            onClick={handleSidebarToggle}
-          >
-            <PanelLeftOpen />
-            <span className="sr-only">Open sidebar</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            asChild
-          >
-            <Link
-              to="/"
-              aria-label="Home"
-              title="Home"
-              onClick={(event) => void handleHomeClick(event)}
-            >
-              <Home />
-              <span className="sr-only">Home</span>
-            </Link>
-          </Button>
-        </aside>
-      )}
+      ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {isReadOnly ? (
@@ -1419,6 +1370,23 @@ export function EditorPage() {
               ) : null}
             </MainMenu>
           </Excalidraw>
+          <button
+            type="button"
+            className="sidebar-toggle-trigger"
+            aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+            title={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+            aria-expanded={sidebarOpen}
+            onClick={handleSidebarToggle}
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose aria-hidden="true" />
+            ) : (
+              <PanelLeftOpen aria-hidden="true" />
+            )}
+            <span className="sr-only">
+              {sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+            </span>
+          </button>
         </div>
       </div>
     </main>
