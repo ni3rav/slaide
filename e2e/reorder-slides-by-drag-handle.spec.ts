@@ -146,13 +146,14 @@ async function dragSlideToInsertion(
 ): Promise<void> {
   const handle = page.getByRole('button', { name: `Reorder slide ${slideNumber}` })
   const target = page.getByTestId(`slide-insertion-${insertionIndex}`)
+  await handle.scrollIntoViewIfNeeded()
+  await target.scrollIntoViewIfNeeded()
   const handleBox = await handle.boundingBox()
   const targetBox = await target.boundingBox()
   if (!handleBox || !targetBox) {
     throw new Error('missing drag target')
   }
 
-  await handle.scrollIntoViewIfNeeded()
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(
