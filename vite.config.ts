@@ -11,24 +11,6 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    // #region agent log
-    {
-      name: 'agent-debug-log',
-      configureServer(server) {
-        server.middlewares.use('/__agent-debug-log', (request, response) => {
-          let body = ''
-          request.on('data', (chunk) => {
-            body += chunk
-          })
-          request.on('end', () => {
-            fs.appendFileSync('/opt/cursor/logs/debug.log', `${body}\n`)
-            response.statusCode = 204
-            response.end()
-          })
-        })
-      },
-    },
-    // #endregion
     react(),
     tailwindcss(),
     VitePWA({

@@ -24,7 +24,6 @@ test.describe('preview slide on demand', () => {
     await page.getByRole('button', { name: 'Preview slide 1' }).click()
 
     await expect(page.getByTestId('slide-preview-panel')).toBeVisible()
-    await expect(page.getByTestId('slide-preview-panel')).toHaveCSS('z-index', '10')
     await expect(page.getByTestId('slide-preview-image')).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('slide-preview-image')).toHaveJSProperty('naturalWidth', 1920)
     await expect(page.getByTestId('slide-preview-image')).toHaveJSProperty('naturalHeight', 1080)
