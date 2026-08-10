@@ -11,6 +11,21 @@ import {
 } from './slide-preview-controller.ts'
 import type { SlidePreviewPanelState } from './SlidePreviewPanel.tsx'
 
+// #region agent log
+function agentDebugLog(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+) {
+  void fetch('/__agent-debug-log', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }),
+  })
+}
+// #endregion
+
 export type SlidePreviewSession = {
   slideId: SlideId
   panelState: SlidePreviewPanelState
@@ -54,6 +69,13 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
       controllerRef.current?.revoke()
+      // #region agent log
+      agentDebugLog('B,C', 'use-slide-preview.ts:startLoad', 'Preview load started', {
+        slideId: slide.id,
+        isActive,
+        generation,
+      })
+      // #endregion
       setSession({
         slideId: slide.id,
         panelState: 'loading',
@@ -67,12 +89,27 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
         const imageUrl = await controllerRef.current!.load(scene)
         if (generation !== loadGenerationRef.current) return
 
+        // #region agent log
+        agentDebugLog('C,D', 'use-slide-preview.ts:startLoad', 'Preview render completed', {
+          slideId: slide.id,
+          generation,
+          activeUrlCount: controllerRef.current?.getActiveUrlCount() ?? 0,
+        })
+        // #endregion
         setSession({
           slideId: slide.id,
           panelState: 'ready',
           imageUrl,
         })
-      } catch {
+      } catch (error) {
+        // #region agent log
+        agentDebugLog('C,D', 'use-slide-preview.ts:startLoad', 'Preview load failed', {
+          slideId: slide.id,
+          generation,
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        })
+        // #endregion
         if (generation !== loadGenerationRef.current) return
         setSession({
           slideId: slide.id,
@@ -92,6 +129,14 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
 
   const openPreview = useCallback(
     (slide: Slide, isActive: boolean) => {
+      // #region agent log
+      agentDebugLog('A,B', 'use-slide-preview.ts:openPreview', 'Preview toggle invoked', {
+        slideId: slide.id,
+        isActive,
+        currentSlideId: session?.slideId ?? null,
+        action: session?.slideId === slide.id ? 'close' : 'open',
+      })
+      // #endregion
       if (session?.slideId === slide.id) {
         clearPreview()
         return

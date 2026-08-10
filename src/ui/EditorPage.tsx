@@ -138,6 +138,27 @@ declare global {
   }
 }
 
+// #region agent log
+function agentDebugLog(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+) {
+  void fetch("/__agent-debug-log", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  });
+}
+// #endregion
+
 export function EditorPage() {
   const { deckId } = useParams<{ deckId: string }>();
   const repository = useDeckRepository();
@@ -182,6 +203,20 @@ export function EditorPage() {
 
   const resolveSceneForPreview = useCallback(
     async (slide: Slide, isActive: boolean): Promise<Scene> => {
+      // #region agent log
+      agentDebugLog(
+        "C",
+        "EditorPage.tsx:resolveSceneForPreview",
+        "Scene resolution entered",
+        {
+          slideId: slide.id,
+          isActive,
+          stateStatus: state.status,
+          editMode: state.status === "ok" ? state.editMode : null,
+          hasAutosave: autosaveRef.current != null,
+        },
+      );
+      // #endregion
       if (isActive && state.status === "ok" && state.editMode === "editable") {
         await autosaveRef.current?.flush();
       }
@@ -198,6 +233,18 @@ export function EditorPage() {
       if (!stored) {
         throw new Error("Slide is unavailable");
       }
+      // #region agent log
+      agentDebugLog(
+        "C,D",
+        "EditorPage.tsx:resolveSceneForPreview",
+        "Scene resolution completed",
+        {
+          slideId: slide.id,
+          elementCount: stored.scene.elements.length,
+          fileCount: Object.keys(stored.scene.files).length,
+        },
+      );
+      // #endregion
       return stored.scene;
     },
     [deckId, repository, state],
@@ -1403,6 +1450,22 @@ function SortableSlideRow({
             aria-expanded={isPreviewOpen}
             disabled={isReadOnly}
             onClick={(event) => {
+              // #region agent log
+              agentDebugLog(
+                "A,B",
+                "EditorPage.tsx:previewButton",
+                "Preview button clicked",
+                {
+                  slideId: slide.id,
+                  isReadOnly,
+                  isPreviewOpen,
+                  serviceWorkerControlled:
+                    navigator.serviceWorker?.controller != null,
+                  serviceWorkerScript:
+                    navigator.serviceWorker?.controller?.scriptURL ?? null,
+                },
+              );
+              // #endregion
               event.stopPropagation();
               onTogglePreview();
             }}

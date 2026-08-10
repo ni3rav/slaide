@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -19,9 +20,58 @@ export function SlidePreviewPanel({
   imageUrl,
   onRetry,
 }: SlidePreviewPanelProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const image = panel.querySelector('img')
+    const panelRect = panel.getBoundingClientRect()
+    const panelStyle = getComputedStyle(panel)
+    const centerX = panelRect.left + panelRect.width / 2
+    const centerY = panelRect.top + panelRect.height / 2
+    const coveringElement =
+      panelRect.width > 0 && panelRect.height > 0
+        ? document.elementFromPoint(centerX, centerY)
+        : null
+    // #region agent log
+    void fetch('/__agent-debug-log', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        hypothesisId: 'D,E',
+        location: 'SlidePreviewPanel.tsx:render',
+        message: 'Preview panel committed to DOM',
+        data: {
+          state,
+          hasImageUrl: imageUrl != null,
+          panelRect: {
+            width: panelRect.width,
+            height: panelRect.height,
+            x: panelRect.x,
+            y: panelRect.y,
+          },
+          panelDisplay: panelStyle.display,
+          panelVisibility: panelStyle.visibility,
+          panelOpacity: panelStyle.opacity,
+          panelZIndex: panelStyle.zIndex,
+          coveringTag: coveringElement?.tagName ?? null,
+          coveringTestId: coveringElement?.getAttribute('data-testid') ?? null,
+          imagePresent: image != null,
+          imageComplete: image?.complete ?? null,
+          imageNaturalWidth: image?.naturalWidth ?? null,
+          imageNaturalHeight: image?.naturalHeight ?? null,
+        },
+        timestamp: Date.now(),
+      }),
+    })
+    // #endregion
+  }, [imageUrl, state])
+
   return (
     <div
-      className="pointer-events-none absolute inset-0 overflow-hidden rounded-md bg-card"
+      ref={panelRef}
+      className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-md bg-card"
       data-testid="slide-preview-panel"
       data-preview-state={state}
       aria-label={`Preview for slide ${slideNumber}`}
