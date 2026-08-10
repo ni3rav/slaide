@@ -83,7 +83,7 @@ describe('slide element bounds', () => {
         y: 500,
         width: 400,
         height: 100,
-        angle: Math.PI / 4,
+        angle: Math.PI / 4 as never,
       },
     ])[0]!
     const previous = newElementWith(rotated, { x: 900, y: 400 })
@@ -120,7 +120,7 @@ describe('slide element bounds', () => {
         points: [
           [0, 0],
           [200, 0],
-        ],
+        ] as never,
       },
     ])[0]!
     const result = constrainAllElements([arrow])

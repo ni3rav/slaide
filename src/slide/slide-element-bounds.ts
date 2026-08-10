@@ -1,18 +1,30 @@
-import {
-  getCommonBounds,
-  isElementInsideBBox,
-  newElementWith,
-} from '@excalidraw/excalidraw'
+import { getCommonBounds, newElementWith } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { SLIDE_BOUNDS, SLIDE_HEIGHT, SLIDE_WIDTH } from './slide-dimensions.ts'
 
 type ElementsMap = Map<string, ExcalidrawElement>
+type Bounds = readonly [number, number, number, number]
 
 function elementBounds(
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
-): readonly [number, number, number, number] {
+): Bounds {
   return getCommonBounds([element], elementsMap)
+}
+
+/** Local stand-in for the helper removed from newer Excalidraw builds. */
+function isElementInsideBBox(
+  element: ExcalidrawElement,
+  bbox: Bounds,
+  elementsMap?: ElementsMap,
+): boolean {
+  const [minX, minY, maxX, maxY] = getCommonBounds([element], elementsMap)
+  return (
+    minX >= bbox[0] &&
+    minY >= bbox[1] &&
+    maxX <= bbox[2] &&
+    maxY <= bbox[3]
+  )
 }
 
 export function toElementsMap(
@@ -23,10 +35,10 @@ export function toElementsMap(
 
 export function isElementInsideSlide(
   element: ExcalidrawElement,
-  _elementsMap: ElementsMap,
+  elementsMap: ElementsMap,
 ): boolean {
   if (element.isDeleted) return true
-  return isElementInsideBBox(element, SLIDE_BOUNDS)
+  return isElementInsideBBox(element, SLIDE_BOUNDS, elementsMap)
 }
 
 export function elementFitsInSlide(
@@ -201,7 +213,10 @@ function scaleElementFromBounds(
     return newElementWith(element, {
       width: element.width * scale,
       height: element.height * scale,
-      points: element.points.map(([px, py]: readonly [number, number]) => [px * scale, py * scale] as const),
+      points: element.points.map(([px, py]: readonly [number, number]) => [
+        px * scale,
+        py * scale,
+      ]) as unknown as typeof element.points,
     })
   }
 
@@ -209,7 +224,10 @@ function scaleElementFromBounds(
     return newElementWith(element, {
       width: element.width * scale,
       height: element.height * scale,
-      points: element.points.map(([px, py]: readonly [number, number]) => [px * scale, py * scale] as const),
+      points: element.points.map(([px, py]: readonly [number, number]) => [
+        px * scale,
+        py * scale,
+      ]) as unknown as typeof element.points,
     })
   }
 

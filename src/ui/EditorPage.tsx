@@ -120,6 +120,8 @@ type SlaideTestApi = {
   moveRectangleOffSlide: () => void;
   getElementCount: () => number;
   getSceneElementCount: () => number;
+  getActiveTool: () => string;
+  getElementTypes: () => string[];
   getCamera: () => { scrollX: number; scrollY: number; zoom: number };
   getViewport: () => { width: number; height: number };
   getElementGeometry: () => Array<{
@@ -1243,7 +1245,10 @@ export function EditorPage() {
               },
               tools: {
                 image: !isReadOnly,
-              },
+                // Keep Draw to Shape activatable (Shift+X / sidebar). Do not
+                // set autoshape:false — that disables the tool and shortcut.
+                ...(!isReadOnly ? { autoshape: true } : {}),
+              } as { image: boolean },
             }}
             aiEnabled={false}
             validateEmbeddable={false}
@@ -1253,8 +1258,11 @@ export function EditorPage() {
                 window.open(element.link, "_blank", "noopener,noreferrer");
               }
             }}
-            excalidrawAPI={(api) => {
-              if (isReadOnly) {
+            onExcalidrawAPI={(api) => {
+              if (!api || isReadOnly) {
+                if (!api) {
+                  excalidrawApiRef.current = null;
+                }
                 slideConstraintsRef.current?.dispose();
                 slideConstraintsRef.current = null;
                 delete window.__slaideTest;
@@ -1331,6 +1339,15 @@ export function EditorPage() {
                 getSceneElementCount() {
                   return api.getSceneElements().length;
                 },
+                getActiveTool() {
+                  return api.getAppState().activeTool.type;
+                },
+                getElementTypes() {
+                  return api
+                    .getSceneElements()
+                    .filter((element) => !element.isDeleted)
+                    .map((element) => element.type);
+                },
                 getCamera() {
                   const { scrollX, scrollY, zoom } = api.getAppState();
                   return { scrollX, scrollY, zoom: zoom.value };
@@ -1404,7 +1421,7 @@ export function EditorPage() {
           >
             <MainMenu>
               {!isReadOnly ? <MainMenu.DefaultItems.ClearCanvas /> : null}
-              <MainMenu.DefaultItems.ToggleTheme />
+              <MainMenu.DefaultItems.ToggleTheme allowSystemTheme={false} />
               {!isReadOnly ? (
                 <MainMenu.DefaultItems.ChangeCanvasBackground />
               ) : null}
