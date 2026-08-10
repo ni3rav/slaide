@@ -28,7 +28,7 @@ test.describe('prevent concurrent deck editing', () => {
     await expect(viewer.getByTestId('readonly-notice')).toContainText(
       'open for editing in another tab or window',
     )
-    await expect(viewer.getByTestId('toolbar-rectangle')).toBeHidden()
+    await expect(viewer.getByTestId('editor-tool-rectangle')).toBeHidden()
 
     await context.close()
   })
@@ -52,7 +52,7 @@ test.describe('prevent concurrent deck editing', () => {
       timeout: 5000,
     })
     await expect(viewer.getByTestId('save-status')).toHaveText('Saved')
-    await expect(viewer.getByTestId('toolbar-rectangle')).toBeVisible()
+    await expect(viewer.getByTestId('editor-tool-rectangle')).toBeVisible()
 
     await context.close()
   })
@@ -138,8 +138,8 @@ test.describe('prevent concurrent deck editing', () => {
     await expect(secondEditor.getByTestId('save-status')).toHaveText('Saved')
     await expect(firstEditor.getByTestId('readonly-notice')).toHaveCount(0)
     await expect(secondEditor.getByTestId('readonly-notice')).toHaveCount(0)
-    await expect(firstEditor.getByTestId('toolbar-rectangle')).toBeVisible()
-    await expect(secondEditor.getByTestId('toolbar-rectangle')).toBeVisible()
+    await expect(firstEditor.getByTestId('editor-tool-rectangle')).toBeVisible()
+    await expect(secondEditor.getByTestId('editor-tool-rectangle')).toBeVisible()
 
     expect(firstDeckId).not.toBe(secondDeckId)
 

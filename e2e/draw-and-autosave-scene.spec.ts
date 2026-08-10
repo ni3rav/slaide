@@ -15,10 +15,10 @@ test.describe('draw and autosave one scene', () => {
     await openEditor(page)
 
     await expect(page.getByTestId('excalidraw-host')).toBeVisible()
-    await expect(page.getByTestId('toolbar-rectangle')).toBeVisible()
-    await expect(page.getByTestId('toolbar-freedraw')).toBeVisible()
-    await expect(page.getByTestId('toolbar-image')).toBeVisible()
-    await expect(page.getByTestId('toolbar-eraser')).toBeVisible()
+    await expect(page.getByTestId('editor-tool-rectangle')).toBeVisible()
+    await expect(page.getByTestId('editor-tool-freedraw')).toBeVisible()
+    await expect(page.getByTestId('editor-tool-image')).toBeVisible()
+    await expect(page.getByTestId('editor-tool-eraser')).toBeVisible()
     await expect(page.locator('.App-toolbar__extra-tools-trigger')).toBeHidden()
     await expect(page.locator('.default-sidebar-trigger')).toBeHidden()
 

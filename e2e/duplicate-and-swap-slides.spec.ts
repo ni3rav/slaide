@@ -85,6 +85,7 @@ test.describe('duplicate and swap slides', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
 
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 
@@ -92,7 +93,9 @@ test.describe('duplicate and swap slides', () => {
     await page.getByRole('checkbox', { name: 'Select slide 3' }).check()
     await page.getByRole('button', { name: 'Swap' }).click()
 
-    expect(await readSlideOrder(page, deckId)).toEqual([slideC, slideB, slideA])
+    await expect
+      .poll(() => readSlideOrder(page, deckId))
+      .toEqual([slideC, slideB, slideA])
     await expect(page.getByRole('button', { name: '1', exact: true })).toContainText('1')
     await expect(page.getByRole('button', { name: '3', exact: true })).toContainText('3')
   })

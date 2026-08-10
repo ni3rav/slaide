@@ -12,6 +12,13 @@ declare global {
       moveRectangleOffSlide: () => void
       getCamera: () => { scrollX: number; scrollY: number; zoom: number }
       getViewport: () => { width: number; height: number }
+      getElementGeometry: () => Array<{
+        id: string
+        x: number
+        y: number
+        width: number
+        height: number
+      }>
       setCamera: (camera: {
         scrollX?: number
         scrollY?: number
@@ -102,6 +109,46 @@ test.describe('constrain the fixed slide', () => {
       true,
     )
   })
+
+  test('rescales the slide without changing content geometry when the sidebar toggles', async ({
+    page,
+  }) => {
+    await openEditor(page)
+    await page.evaluate(() => window.__slaideTest!.addRectangle())
+
+    const before = await readBoardState(page)
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect
+      .poll(async () => {
+        const state = await readBoardState(page)
+        return {
+          wider: state.viewport.width > before.viewport.width,
+          fitted: Math.abs(state.camera.zoom - state.fitZoom) < 1e-5,
+        }
+      })
+      .toEqual({ wider: true, fitted: true })
+
+    const collapsed = await readBoardState(page)
+    expect(collapsed.elements).toEqual(before.elements)
+    expect(collapsed.camera.zoom).toBeGreaterThan(before.camera.zoom)
+    expect(collapsed.center).toEqual(before.center)
+
+    await page.getByRole('button', { name: 'Open sidebar' }).click()
+    await expect
+      .poll(async () => {
+        const state = await readBoardState(page)
+        return {
+          width: state.viewport.width,
+          fitted: Math.abs(state.camera.zoom - state.fitZoom) < 1e-5,
+        }
+      })
+      .toEqual({ width: before.viewport.width, fitted: true })
+
+    const reopened = await readBoardState(page)
+    expect(reopened.elements).toEqual(before.elements)
+    expect(reopened.camera.zoom).toBeCloseTo(before.camera.zoom, 5)
+    expect(reopened.center).toEqual(before.center)
+  })
 })
 
 async function openEditor(page: Page): Promise<void> {
@@ -135,6 +182,27 @@ async function readSlideVisibility(page: Page): Promise<{
         maxY: -camera.scrollY + visibleHeight,
         zoom: camera.zoom,
         fitZoom,
+      }
+    },
+    [SLIDE_WIDTH, SLIDE_HEIGHT],
+  )
+}
+
+async function readBoardState(page: Page) {
+  return page.evaluate(
+    ([slideWidth, slideHeight]) => {
+      const api = window.__slaideTest!
+      const camera = api.getCamera()
+      const viewport = api.getViewport()
+      return {
+        camera,
+        viewport,
+        elements: api.getElementGeometry(),
+        fitZoom: Math.min(viewport.width / slideWidth, viewport.height / slideHeight),
+        center: {
+          x: Math.round(-camera.scrollX + viewport.width / camera.zoom / 2),
+          y: Math.round(-camera.scrollY + viewport.height / camera.zoom / 2),
+        },
       }
     },
     [SLIDE_WIDTH, SLIDE_HEIGHT],

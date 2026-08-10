@@ -4,7 +4,6 @@ import {
   type SlideRenderTheme,
 } from '../presentation/slide-to-png.ts'
 import type { Scene, Slide, SlideId } from '../storage/deck-repository.ts'
-import { PREVIEW_CLOSE_DURATION_MS } from './constants.ts'
 import {
   createSlidePreviewController,
   type SlidePreviewController,
@@ -20,13 +19,7 @@ export type SlidePreviewSession = {
 
 export type SlidePreviewTestApi = {
   getActiveObjectUrlCount: () => number
-  isPreviewAnimating: () => boolean
   failNextRender: () => void
-}
-
-type PendingPreview = {
-  slide: Slide
-  isActive: boolean
 }
 
 type UseSlidePreviewOptions = {
@@ -39,7 +32,6 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
   const controllerRef = useRef<SlidePreviewController | null>(null)
   const failNextRenderRef = useRef(false)
   const loadGenerationRef = useRef(0)
-  const pendingOpenRef = useRef<PendingPreview | null>(null)
   const themeRef = useRef<SlideRenderTheme>(theme ?? 'light')
   const [session, setSession] = useState<SlidePreviewSession | null>(null)
 
@@ -61,6 +53,7 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
     async (slide: Slide, isActive: boolean) => {
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
+      controllerRef.current?.revoke()
       setSession({
         slideId: slide.id,
         panelState: 'loading',
@@ -91,51 +84,26 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
     [resolveScene],
   )
 
+  const clearPreview = useCallback(() => {
+    loadGenerationRef.current += 1
+    controllerRef.current?.revoke()
+    setSession(null)
+  }, [])
+
   const openPreview = useCallback(
     (slide: Slide, isActive: boolean) => {
-      if (session?.slideId === slide.id && session.panelState !== 'closing') {
-        loadGenerationRef.current += 1
-        setSession({
-          slideId: session.slideId,
-          panelState: 'closing',
-          imageUrl: session.imageUrl,
-        })
-        return
-      }
-
-      if (session && session.slideId !== slide.id && session.panelState !== 'closing') {
-        pendingOpenRef.current = { slide, isActive }
-        loadGenerationRef.current += 1
-        setSession({
-          slideId: session.slideId,
-          panelState: 'closing',
-          imageUrl: session.imageUrl,
-        })
+      if (session?.slideId === slide.id) {
+        clearPreview()
         return
       }
 
       void startLoad(slide, isActive)
     },
-    [session, startLoad],
+    [clearPreview, session?.slideId, startLoad],
   )
-
-  const handleCloseComplete = useCallback(() => {
-    controllerRef.current?.revoke()
-    const pending = pendingOpenRef.current
-    pendingOpenRef.current = null
-
-    if (pending) {
-      void startLoad(pending.slide, pending.isActive)
-      return
-    }
-
-    setSession(null)
-  }, [startLoad])
 
   const retryPreview = useCallback(
     (slide: Slide, isActive: boolean) => {
-      controllerRef.current?.revoke()
-      loadGenerationRef.current += 1
       void startLoad(slide, isActive)
     },
     [startLoad],
@@ -144,7 +112,6 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
   useEffect(() => {
     window.__slaidePreviewTest = {
       getActiveObjectUrlCount: () => controllerRef.current?.getActiveUrlCount() ?? 0,
-      isPreviewAnimating: () => session?.panelState === 'closing',
       failNextRender: () => {
         failNextRenderRef.current = true
       },
@@ -153,10 +120,11 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
     return () => {
       delete window.__slaidePreviewTest
     }
-  }, [session?.panelState])
+  }, [])
 
   useEffect(() => {
     return () => {
+      loadGenerationRef.current += 1
       controllerRef.current?.revoke()
     }
   }, [])
@@ -164,9 +132,8 @@ export function useSlidePreview({ resolveScene, render, theme }: UseSlidePreview
   return {
     session,
     openPreview,
-    handleCloseComplete,
+    clearPreview,
     retryPreview,
-    closeDurationMs: PREVIEW_CLOSE_DURATION_MS,
   }
 }
 

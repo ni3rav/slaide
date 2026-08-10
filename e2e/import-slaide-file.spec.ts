@@ -33,18 +33,39 @@ const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fix
 test.describe('import a slaide file from the home screen', () => {
   test('imports a valid file as a separate deck with remapped ids', async ({ page }) => {
     await page.goto('/')
+    await expect(page.getByTestId('import-slaide-input')).not.toHaveAttribute('multiple')
     const originalDeckId = await createDeckFromHome(page)
     await renameDeck(page, 'Original deck')
 
-    const filePath = await writeSlaideFixture('valid-deck.slaide', buildValidSlaideFile('Transfer deck'))
+    const transfer = buildValidSlaideFile('Transfer deck')
+    transfer.slides[0]!.scene.elements = [buildRectangle('transfer-rectangle')]
+    const filePath = await writeSlaideFixture('valid-deck.slaide', transfer)
     await triggerImport(page, filePath)
 
+    await expect(page).toHaveURL(/\/decks\/[0-9a-f-]{36}$/i)
+    await expect(page.getByRole('heading', { name: 'Transfer deck' })).toBeVisible()
+    await page.waitForFunction(() => window.__slaideTest != null)
+    await expect.poll(() => page.evaluate(() => window.__slaideTest!.getSceneElementCount())).toBe(1)
+
+    const importedDeckId = page.url().split('/').at(-1)!
+    expect(importedDeckId).not.toBe(originalDeckId)
+    expect(importedDeckId).not.toBe('import-deck-1')
+
+    await page.getByRole('link', { name: 'Home' }).click()
     await expect(page.getByRole('link', { name: 'Transfer deck' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Original deck' })).toBeVisible()
 
-    const importedDeckId = await readDeckIdByTitle(page, 'Transfer deck')
-    expect(importedDeckId).not.toBe(originalDeckId)
-    expect(importedDeckId).not.toBe('import-deck-1')
+    const freshPath = await writeSlaideFixture(
+      'fresh-deck.slaide',
+      buildValidSlaideFile('Fresh deck'),
+    )
+    await triggerImport(page, freshPath)
+
+    await expect(page).toHaveURL(/\/decks\/[0-9a-f-]{36}$/i)
+    await expect(page.getByRole('heading', { name: 'Fresh deck' })).toBeVisible()
+    await page.waitForFunction(() => window.__slaideTest != null)
+    await expect.poll(() => page.evaluate(() => window.__slaideTest!.getSceneElementCount())).toBe(0)
+    expect(page.url().split('/').at(-1)).not.toBe(importedDeckId)
   })
 
   test('suffixes the title when a local deck already uses it', async ({ page }) => {
@@ -59,6 +80,8 @@ test.describe('import a slaide file from the home screen', () => {
     )
     await triggerImport(page, filePath)
 
+    await expect(page.getByRole('heading', { name: 'Shared title (Imported)' })).toBeVisible()
+    await page.getByRole('link', { name: 'Home' }).click()
     await expect(page.getByRole('link', { name: 'Shared title', exact: true })).toHaveCount(1)
     await expect(
       page.getByRole('link', { name: 'Shared title (Imported)', exact: true }),
@@ -146,7 +169,7 @@ test.describe('import a slaide file from the home screen', () => {
     expect(exported.deck.theme).toBe('dark')
 
     await triggerImport(page, await download.path())
-    await expect(page.getByRole('link', { name: 'Theme deck (Imported)' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Theme deck (Imported)' })).toBeVisible()
 
     await expect
       .poll(() =>
@@ -168,9 +191,9 @@ test.describe('import a slaide file from the home screen', () => {
     const exported = await readExportedSlaideFile(download)
 
     await triggerImport(page, await download.path())
-    await expect(page.getByRole('link', { name: 'Round trip deck (Imported)' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Round trip deck (Imported)' })).toBeVisible()
 
-    const importedDeckId = await readDeckIdByTitle(page, 'Round trip deck (Imported)')
+    const importedDeckId = page.url().split('/').at(-1)!
     expect(importedDeckId).not.toBe(originalDeckId)
 
     const imported = await readDeckFromIndexedDb(page, importedDeckId)
@@ -206,9 +229,6 @@ async function triggerImport(page: Page, filePath: string | null | undefined): P
     throw new Error('Import file path missing')
   }
   await page.locator('[data-testid="import-slaide-input"]').setInputFiles(filePath)
-  await expect(page.getByRole('button', { name: 'Import deck' })).toBeEnabled({
-    timeout: 15_000,
-  })
 }
 
 async function triggerHomeExport(
@@ -236,14 +256,6 @@ async function readExportedSlaideFile(download: {
     throw new Error('Download path missing')
   }
   return JSON.parse(await readFile(filePath, 'utf8')) as SlaideFile
-}
-
-async function readDeckIdByTitle(page: Page, title: string): Promise<string> {
-  const href = await page.getByRole('link', { name: title }).getAttribute('href')
-  if (!href) {
-    throw new Error(`Deck link missing for ${title}`)
-  }
-  return href.split('/').at(-1)!
 }
 
 async function readSlideOrder(page: Page, deckId: string): Promise<string[]> {
@@ -411,6 +423,35 @@ function buildValidSlaideFile(title: string): SlaideFile {
         updatedAt: now,
       },
     ],
+  }
+}
+
+function buildRectangle(id: string): Record<string, unknown> {
+  return {
+    id,
+    type: 'rectangle',
+    x: 100,
+    y: 100,
+    width: 300,
+    height: 200,
+    angle: 0,
+    strokeColor: '#000000',
+    backgroundColor: 'transparent',
+    fillStyle: 'solid',
+    strokeWidth: 1,
+    strokeStyle: 'solid',
+    roughness: 1,
+    opacity: 100,
+    seed: 1,
+    version: 1,
+    versionNonce: 1,
+    isDeleted: false,
+    groupIds: [],
+    frameId: null,
+    boundElements: null,
+    updated: 1,
+    link: null,
+    locked: false,
   }
 }
 

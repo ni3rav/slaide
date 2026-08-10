@@ -7,7 +7,6 @@ declare global {
     }
     __slaidePreviewTest?: {
       getActiveObjectUrlCount: () => number
-      isPreviewAnimating: () => boolean
       failNextRender: () => void
     }
   }
@@ -48,6 +47,7 @@ test.describe('preview slide on demand', () => {
       'aria-expanded',
       'true',
     )
+    const firstUrl = await page.getByTestId('slide-preview-image').getAttribute('src')
 
     await page.getByRole('button', { name: 'Preview slide 2' }).click()
     await expect(page.getByRole('button', { name: 'Preview slide 1' })).toHaveAttribute(
@@ -60,6 +60,10 @@ test.describe('preview slide on demand', () => {
       'true',
     )
     await expect(page.getByTestId('slide-preview-image')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('slide-preview-image')).not.toHaveAttribute('src', firstUrl!)
+    await expect
+      .poll(() => page.evaluate(() => window.__slaidePreviewTest?.getActiveObjectUrlCount() ?? 0))
+      .toBe(1)
   })
 
   test('shows retry after a render failure and recovers', async ({ page }) => {
@@ -75,7 +79,7 @@ test.describe('preview slide on demand', () => {
     await expect(page.getByTestId('slide-preview-image')).toBeVisible({ timeout: 15000 })
   })
 
-  test('closes with animation and revokes preview object URLs', async ({ page }) => {
+  test('clears preview state immediately when closed', async ({ page }) => {
     await openEditor(page)
 
     await page.getByRole('button', { name: 'Preview slide 1' }).click()
@@ -85,18 +89,49 @@ test.describe('preview slide on demand', () => {
       .toBe(1)
 
     await page.getByRole('button', { name: 'Preview slide 1' }).click()
-    await expect(page.getByTestId('slide-preview-panel')).toHaveAttribute(
-      'data-preview-state',
-      'closing',
-    )
-    await expect
-      .poll(() => page.evaluate(() => window.__slaidePreviewTest?.isPreviewAnimating() ?? false))
-      .toBe(true)
-
-    await expect(page.getByTestId('slide-preview-panel')).toHaveCount(0, { timeout: 2000 })
+    await expect(page.getByTestId('slide-preview-panel')).toHaveCount(0)
     await expect
       .poll(() => page.evaluate(() => window.__slaidePreviewTest?.getActiveObjectUrlCount() ?? 0))
       .toBe(0)
+  })
+
+  test('generates a fresh preview after the previous preview is closed', async ({ page }) => {
+    await openEditor(page)
+
+    await page.getByRole('button', { name: 'Preview slide 1' }).click()
+    const firstImage = page.getByTestId('slide-preview-image')
+    await expect(firstImage).toBeVisible({ timeout: 15000 })
+    const firstUrl = await firstImage.getAttribute('src')
+
+    await page.getByRole('button', { name: 'Preview slide 1' }).click()
+    await expect(page.getByTestId('slide-preview-panel')).toHaveCount(0)
+
+    await page.evaluate(() => window.__slaideTest!.addRectangle())
+    await expect(page.getByTestId('save-status')).toHaveText('Saved', { timeout: 5000 })
+    await page.getByRole('button', { name: 'Preview slide 1' }).click()
+
+    const replacementImage = page.getByTestId('slide-preview-image')
+    await expect(replacementImage).toBeVisible({ timeout: 15000 })
+    await expect(replacementImage).not.toHaveAttribute('src', firstUrl!)
+    await expect
+      .poll(() => page.evaluate(() => window.__slaidePreviewTest?.getActiveObjectUrlCount() ?? 0))
+      .toBe(1)
+  })
+
+  test('clears an open preview when the sidebar is collapsed', async ({ page }) => {
+    await openEditor(page)
+
+    await page.getByRole('button', { name: 'Preview slide 1' }).click()
+    await expect(page.getByTestId('slide-preview-image')).toBeVisible({ timeout: 15000 })
+
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.getByTestId('slide-preview-panel')).toHaveCount(0)
+    await expect
+      .poll(() => page.evaluate(() => window.__slaidePreviewTest?.getActiveObjectUrlCount() ?? 0))
+      .toBe(0)
+
+    await page.getByRole('button', { name: 'Open sidebar' }).click()
+    await expect(page.getByTestId('slide-preview-panel')).toHaveCount(0)
   })
 
   test('closes an open preview when Escape is pressed', async ({ page }) => {

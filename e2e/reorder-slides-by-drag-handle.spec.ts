@@ -24,6 +24,7 @@ test.describe('reorder slides by drag handle', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 
     await dragSlideToInsertion(page, 3, 0)
@@ -39,6 +40,7 @@ test.describe('reorder slides by drag handle', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 
     await dragSlideToInsertion(page, 1, 3)
@@ -53,6 +55,7 @@ test.describe('reorder slides by drag handle', () => {
     const deckId = page.url().split('/').at(-1)!
 
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(2)
     const before = await readSlideOrder(page, deckId)
 
     const rowButton = page.getByRole('button', { name: '1', exact: true })
@@ -78,6 +81,7 @@ test.describe('reorder slides by drag handle', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 
     await page.getByRole('checkbox', { name: 'Select slide 1' }).check()
@@ -96,6 +100,7 @@ test.describe('reorder slides by drag handle', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 
     const handle = page.getByRole('button', { name: 'Reorder slide 1' })
@@ -113,6 +118,7 @@ test.describe('reorder slides by drag handle', () => {
 
     await page.getByRole('button', { name: 'Add slide' }).click()
     await page.getByRole('button', { name: 'Add slide' }).click()
+    await expect(page.getByRole('listitem')).toHaveCount(3)
     const [slideA, slideB, slideC] = await readSlideOrder(page, deckId)
 
     await dragSlideToInsertion(page, 1, 2)
@@ -140,13 +146,14 @@ async function dragSlideToInsertion(
 ): Promise<void> {
   const handle = page.getByRole('button', { name: `Reorder slide ${slideNumber}` })
   const target = page.getByTestId(`slide-insertion-${insertionIndex}`)
+  await handle.scrollIntoViewIfNeeded()
+  await target.scrollIntoViewIfNeeded()
   const handleBox = await handle.boundingBox()
   const targetBox = await target.boundingBox()
   if (!handleBox || !targetBox) {
     throw new Error('missing drag target')
   }
 
-  await handle.scrollIntoViewIfNeeded()
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(
