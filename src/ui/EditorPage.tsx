@@ -795,265 +795,101 @@ export function EditorPage() {
     <main className="m-0 flex h-svh max-w-none flex-row overflow-hidden bg-background p-0">
       {sidebarOpen ? (
         <aside
-          className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+          className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
           aria-label="Slides"
           aria-busy={isSlideReordering}
           data-reordering={isSlideReordering ? "true" : "false"}
         >
-          <div className="flex shrink-0 flex-col gap-2.5 border-b border-sidebar-border px-2.5 pb-2.5 pt-2">
-            <div className="flex items-center gap-1">
-              <div className="flex items-center gap-0.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground"
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                  aria-expanded={true}
-                  onClick={handleSidebarToggle}
-                >
-                  <PanelLeftClose />
-                  <span className="sr-only">Collapse sidebar</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground"
-                  asChild
-                >
-                  <Link
-                    to="/"
-                    aria-label="Home"
-                    title="Home"
-                    onClick={(event) => void handleHomeClick(event)}
-                  >
-                    <Home />
-                    <span className="sr-only">Home</span>
-                  </Link>
-                </Button>
-              </div>
-              <div className="ml-auto flex items-center gap-0.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground"
-                  aria-label="Present"
-                  title="Present"
-                  onClick={() => handlePresentClick()}
-                >
-                  <Presentation />
-                  <span className="sr-only">Present</span>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground"
-                      aria-label={exporting ? "Exporting deck" : "Export deck"}
-                      title={exporting ? "Exporting deck" : "Export deck"}
-                      disabled={exporting}
-                    >
-                      {exporting ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <Download />
-                      )}
-                      <span className="sr-only">
-                        {exporting ? "Exporting…" : "Export"}
-                      </span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() => setPendingExportFormat("slaide")}
-                    >
-                      <FileJson />
-                      SLAIDE
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => setPendingExportFormat("pdf")}
-                    >
-                      <FileText />
-                      PDF
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <ThemeSelector />
-              </div>
-            </div>
-
-            <div className="space-y-1 px-1">
-              <h1 className="m-0 truncate text-sm font-semibold leading-tight tracking-tight">
-                {state.deck.title}
-              </h1>
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <p className="m-0 min-w-0 truncate">
-                  Slide {activeSlideIndex + 1} of {state.slides.length}
-                </p>
-                {isReadOnly ? null : (
-                  <>
-                    <span
-                      className="size-0.5 shrink-0 rounded-full bg-border"
-                      aria-hidden="true"
-                    />
-                    <p
-                      role="status"
-                      aria-live="polite"
-                      className={`m-0 shrink-0 tabular-nums ${
-                        saveStatus === "failed"
-                          ? "font-medium text-destructive"
-                          : ""
-                      }`}
-                      data-testid="save-status"
-                    >
-                      {formatSaveStatus(saveStatus)}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-2.5 pt-2">
-            <span className="px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-              Slides
-            </span>
-            <div className="flex items-center gap-0.5">
+          <section
+            aria-label="Editor actions"
+            className="shrink-0 border-b border-sidebar-border px-2.5 py-2.5"
+          >
+            <div className="grid grid-cols-2 gap-1">
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                disabled={isReadOnly}
-                aria-label="Add slide"
-                title="Add slide"
-                onClick={() => void handleAddSlide()}
+                size="sm"
+                className="h-8 justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                aria-expanded={true}
+                onClick={handleSidebarToggle}
               >
-                <Plus />
-                <span className="sr-only">Add slide</span>
+                <PanelLeftClose />
+                Collapse
               </Button>
-              {checkedSlideIds.size > 0 && !isReadOnly ? (
-                <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                asChild
+              >
+                <Link
+                  to="/"
+                  aria-label="Home"
+                  title="Home"
+                  onClick={(event) => void handleHomeClick(event)}
+                >
+                  <Home />
+                  Home
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                aria-label="Present"
+                title="Present"
+                onClick={() => handlePresentClick()}
+              >
+                <Presentation />
+                Present
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    aria-label="Duplicate"
-                    title="Duplicate selected slides"
-                    onClick={() => void handleDuplicateSlides()}
+                    size="sm"
+                    className="h-8 w-full justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    aria-label={exporting ? "Exporting deck" : "Export deck"}
+                    title={exporting ? "Exporting deck" : "Export deck"}
+                    disabled={exporting}
                   >
-                    <Copy />
-                    <span className="sr-only">Duplicate</span>
+                    {exporting ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Download />
+                    )}
+                    {exporting ? "Exporting…" : "Export"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    aria-label="Swap"
-                    title="Swap selected slides"
-                    disabled={checkedSlideIds.size !== 2}
-                    onClick={() => void handleSwapSlides()}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onSelect={() => setPendingExportFormat("slaide")}
                   >
-                    <ArrowLeftRight />
-                    <span className="sr-only">Swap</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Delete"
-                    title="Delete selected slides"
-                    onClick={() => void handleDeleteSlides()}
+                    <FileJson />
+                    SLAIDE
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => setPendingExportFormat("pdf")}
                   >
-                    <Trash2 />
-                    <span className="sr-only">Delete</span>
-                  </Button>
-                </>
-              ) : null}
+                    <FileText />
+                    PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ThemeSelector
+                labeled
+                className="h-8 justify-start gap-2 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+              />
             </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
-            <DndContext
-              sensors={slideSensors}
-              onDragStart={handleSlideDragStart}
-              onDragMove={handleSlideDragMove}
-              onDragEnd={(event) => void handleSlideDragEnd(event)}
-              onDragCancel={handleSlideDragCancel}
-            >
-              <ol className="m-0 flex list-none flex-col gap-1 p-0">
-                {state.slides.map((slide, index) => (
-                  <Fragment key={slide.id}>
-                    <SlideInsertionIndicator
-                      index={index}
-                      active={insertionIndex === index}
-                    />
-                    <SortableSlideRow
-                      slide={slide}
-                      index={index}
-                      isActive={slide.id === state.activeSlide.id}
-                      isChecked={checkedSlideIds.has(slide.id)}
-                      isReadOnly={isReadOnly || isSlideReordering}
-                      isDragging={activeDragSlideId === slide.id}
-                      slideCount={state.slides.length}
-                      isPreviewOpen={previewSession?.slideId === slide.id}
-                      previewSession={
-                        previewSession?.slideId === slide.id
-                          ? previewSession
-                          : null
-                      }
-                      onSelect={() => void handleSelectSlide(slide.id)}
-                      onToggleChecked={() => toggleSlideChecked(slide.id)}
-                      onTogglePreview={() =>
-                        openPreview(slide, slide.id === state.activeSlide.id)
-                      }
-                      onPreviewRetry={() =>
-                        retryPreview(slide, slide.id === state.activeSlide.id)
-                      }
-                      onKeyboardReorder={(insertionIndex) =>
-                        void commitSlideReorder(slide.id, insertionIndex)
-                      }
-                    />
-                  </Fragment>
-                ))}
-                <SlideInsertionIndicator
-                  index={state.slides.length}
-                  active={insertionIndex === state.slides.length}
-                />
-              </ol>
-              <DragOverlay dropAnimation={null}>
-                {activeDragSlideId
-                  ? (() => {
-                      const draggedSlide = state.slides.find(
-                        (slide) => slide.id === activeDragSlideId,
-                      );
-                      const draggedIndex = state.slides.findIndex(
-                        (slide) => slide.id === activeDragSlideId,
-                      );
-                      if (!draggedSlide) return null;
-                      return (
-                        <SlideRowPreview
-                          index={draggedIndex}
-                          isActive={draggedSlide.id === state.activeSlide.id}
-                          isChecked={checkedSlideIds.has(draggedSlide.id)}
-                        />
-                      );
-                    })()
-                  : null}
-              </DragOverlay>
-            </DndContext>
-          </div>
+          </section>
 
           {!isReadOnly ? (
-            <div className="shrink-0 border-t border-sidebar-border px-2.5 py-2.5">
+            <section className="shrink-0 border-b border-sidebar-border px-2.5 py-2.5">
               <EditorDrawingTools
                 activeTool={activeTool}
                 zoomPercent={zoomPercent}
@@ -1073,8 +909,179 @@ export function EditorPage() {
                 }}
                 onResetZoom={handleResetZoom}
               />
-            </div>
+            </section>
           ) : null}
+
+          <section
+            aria-label="Deck"
+            className="shrink-0 border-b border-sidebar-border px-3 py-2.5"
+          >
+            <h1 className="m-0 truncate text-sm font-semibold leading-tight tracking-tight">
+              {state.deck.title}
+            </h1>
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <p className="m-0 min-w-0 truncate">
+                Slide {activeSlideIndex + 1} of {state.slides.length}
+              </p>
+              {isReadOnly ? null : (
+                <>
+                  <span
+                    className="size-0.5 shrink-0 rounded-full bg-border"
+                    aria-hidden="true"
+                  />
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className={`m-0 shrink-0 tabular-nums ${
+                      saveStatus === "failed"
+                        ? "font-medium text-destructive"
+                        : ""
+                    }`}
+                    data-testid="save-status"
+                  >
+                    {formatSaveStatus(saveStatus)}
+                  </p>
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="flex min-h-0 flex-1 flex-col">
+            <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-2.5 pt-2">
+              <span className="px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                Slides
+              </span>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  disabled={isReadOnly}
+                  aria-label="Add slide"
+                  title="Add slide"
+                  onClick={() => void handleAddSlide()}
+                >
+                  <Plus />
+                  <span className="sr-only">Add slide</span>
+                </Button>
+                {checkedSlideIds.size > 0 && !isReadOnly ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      aria-label="Duplicate"
+                      title="Duplicate selected slides"
+                      onClick={() => void handleDuplicateSlides()}
+                    >
+                      <Copy />
+                      <span className="sr-only">Duplicate</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      aria-label="Swap"
+                      title="Swap selected slides"
+                      disabled={checkedSlideIds.size !== 2}
+                      onClick={() => void handleSwapSlides()}
+                    >
+                      <ArrowLeftRight />
+                      <span className="sr-only">Swap</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Delete"
+                      title="Delete selected slides"
+                      onClick={() => void handleDeleteSlides()}
+                    >
+                      <Trash2 />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
+              <DndContext
+                sensors={slideSensors}
+                onDragStart={handleSlideDragStart}
+                onDragMove={handleSlideDragMove}
+                onDragEnd={(event) => void handleSlideDragEnd(event)}
+                onDragCancel={handleSlideDragCancel}
+              >
+                <ol className="m-0 flex list-none flex-col gap-1 p-0">
+                  {state.slides.map((slide, index) => (
+                    <Fragment key={slide.id}>
+                      <SlideInsertionIndicator
+                        index={index}
+                        active={insertionIndex === index}
+                      />
+                      <SortableSlideRow
+                        slide={slide}
+                        index={index}
+                        isActive={slide.id === state.activeSlide.id}
+                        isChecked={checkedSlideIds.has(slide.id)}
+                        isReadOnly={isReadOnly || isSlideReordering}
+                        isDragging={activeDragSlideId === slide.id}
+                        slideCount={state.slides.length}
+                        isPreviewOpen={previewSession?.slideId === slide.id}
+                        previewSession={
+                          previewSession?.slideId === slide.id
+                            ? previewSession
+                            : null
+                        }
+                        onSelect={() => void handleSelectSlide(slide.id)}
+                        onToggleChecked={() => toggleSlideChecked(slide.id)}
+                        onTogglePreview={() =>
+                          openPreview(slide, slide.id === state.activeSlide.id)
+                        }
+                        onPreviewRetry={() =>
+                          retryPreview(slide, slide.id === state.activeSlide.id)
+                        }
+                        onKeyboardReorder={(insertionIndex) =>
+                          void commitSlideReorder(slide.id, insertionIndex)
+                        }
+                      />
+                    </Fragment>
+                  ))}
+                  <SlideInsertionIndicator
+                    index={state.slides.length}
+                    active={insertionIndex === state.slides.length}
+                  />
+                </ol>
+                <DragOverlay dropAnimation={null}>
+                  {activeDragSlideId
+                    ? (() => {
+                        const draggedSlide = state.slides.find(
+                          (slide) => slide.id === activeDragSlideId,
+                        );
+                        const draggedIndex = state.slides.findIndex(
+                          (slide) => slide.id === activeDragSlideId,
+                        );
+                        if (!draggedSlide) return null;
+                        return (
+                          <SlideRowPreview
+                            index={draggedIndex}
+                            isActive={
+                              draggedSlide.id === state.activeSlide.id
+                            }
+                            isChecked={checkedSlideIds.has(draggedSlide.id)}
+                          />
+                        );
+                      })()
+                    : null}
+                </DragOverlay>
+              </DndContext>
+            </div>
+          </section>
         </aside>
       ) : (
         <aside
