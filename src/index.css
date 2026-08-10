@@ -219,3 +219,39 @@
 .editor-canvas .default-sidebar-trigger {
   display: none !important;
 }
+
+/* Tools, undo/redo, and zoom live in the app sidebar. Keep Excalidraw
+   controls in the DOM for action wiring, but free the canvas chrome. */
+.editor-canvas .shapes-section {
+  display: none !important;
+}
+
+.editor-canvas .layer-ui__wrapper__footer-left,
+.editor-canvas .layer-ui__wrapper__footer-right {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.editor-canvas .FixedSideContainer_side_top {
+  pointer-events: none;
+}
+
+.editor-canvas .App-menu_top__left {
+  pointer-events: auto;
+}
+
+.editor-canvas .App-menu_top {
+  justify-content: flex-start;
+}
+
+.editor-canvas .Island.App-menu__left,
+.editor-canvas .selected-shape-actions {
+  max-width: min(220px, 40vw);
+}

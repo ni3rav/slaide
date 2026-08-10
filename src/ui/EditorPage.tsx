@@ -68,6 +68,7 @@ import {
   toElementsMap,
 } from "../slide/slide-element-bounds.ts";
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from "../slide/slide-dimensions.ts";
+import { clampCamera } from "../slide/slide-camera.ts";
 import { planSlideInsertion } from "../slide/slide-reorder.ts";
 import { exportDeckAsSlaideFile } from "../slaide-file/export-deck.ts";
 import {
@@ -92,11 +93,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import { useTheme } from "./ThemeProvider.tsx";
 import { ThemeSelector } from "./ThemeSelector.tsx";
 import { ExportThemeDialog } from "./ExportThemeDialog.tsx";
 import type { DeckTheme } from "../storage/deck-repository.ts";
+import {
+  EditorDrawingTools,
+  clickExcalidrawControl,
+  type DrawingToolType,
+} from "./editor-drawing-tools.tsx";
 
 type EditorState =
   | { status: "loading" }
@@ -166,6 +171,8 @@ export function EditorPage() {
   const [pendingExportFormat, setPendingExportFormat] = useState<
     "pdf" | "slaide" | null
   >(null);
+  const [activeTool, setActiveTool] = useState<string>("selection");
+  const [zoomPercent, setZoomPercent] = useState(100);
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(
     null,
   );
@@ -681,6 +688,46 @@ export function EditorPage() {
     setSidebarOpen((open) => !open);
   }
 
+  function handleSelectTool(tool: DrawingToolType) {
+    const api = excalidrawApiRef.current;
+    if (!api || isReadOnlyTooling()) return;
+    api.setActiveTool({ type: tool });
+    setActiveTool(tool);
+  }
+
+  function isReadOnlyTooling(): boolean {
+    return state.status !== "ok" || state.editMode === "readonly";
+  }
+
+  function handleZoomBy(factor: number) {
+    const api = excalidrawApiRef.current;
+    if (!api) return;
+    const { scrollX, scrollY, zoom, width, height } = api.getAppState();
+    if (width <= 0 || height <= 0) return;
+    const next = clampCamera(
+      { scrollX, scrollY, zoom: zoom.value * factor },
+      { width, height },
+    );
+    api.updateScene({
+      appState: {
+        scrollX: next.scrollX,
+        scrollY: next.scrollY,
+        zoom: { value: next.zoom as never },
+      },
+    });
+    setZoomPercent(Math.round(next.zoom * 100));
+  }
+
+  function handleResetZoom() {
+    slideConstraintsRef.current?.fitSlideToViewport();
+    const api = excalidrawApiRef.current;
+    if (!api) return;
+    const { width, height, zoom } = api.getAppState();
+    if (width > 0 && height > 0) {
+      setZoomPercent(Math.round(zoom.value * 100));
+    }
+  }
+
   async function handleExport(format: "pdf" | "slaide", exportTheme: DeckTheme) {
     if (state.status !== "ok" || !deckId || exporting) return;
     setExportFailureStage(null);
@@ -748,13 +795,115 @@ export function EditorPage() {
     <main className="m-0 flex h-svh max-w-none flex-row overflow-hidden bg-background p-0">
       {sidebarOpen ? (
         <aside
-          className="flex w-52 shrink-0 flex-col border-r border-border bg-muted/20"
+          className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/20"
           aria-label="Slides"
           aria-busy={isSlideReordering}
           data-reordering={isSlideReordering ? "true" : "false"}
         >
-          <div className="flex h-12 items-center justify-between gap-2 border-b border-border px-3">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground">
+          <div className="flex shrink-0 flex-col gap-2 border-b border-border px-2.5 py-2">
+            <div className="flex items-center gap-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                aria-expanded={true}
+                onClick={handleSidebarToggle}
+              >
+                <PanelLeftClose />
+                <span className="sr-only">Collapse sidebar</span>
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" asChild>
+                <Link
+                  to="/"
+                  aria-label="Home"
+                  title="Home"
+                  onClick={(event) => void handleHomeClick(event)}
+                >
+                  <Home />
+                  <span className="sr-only">Home</span>
+                </Link>
+              </Button>
+              <div className="ml-auto flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Present"
+                  title="Present"
+                  onClick={() => handlePresentClick()}
+                >
+                  <Presentation />
+                  <span className="sr-only">Present</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={exporting ? "Exporting deck" : "Export deck"}
+                      title={exporting ? "Exporting deck" : "Export deck"}
+                      disabled={exporting}
+                    >
+                      {exporting ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <Download />
+                      )}
+                      <span className="sr-only">
+                        {exporting ? "Exporting…" : "Export"}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => setPendingExportFormat("slaide")}
+                    >
+                      <FileJson />
+                      SLAIDE
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => setPendingExportFormat("pdf")}
+                    >
+                      <FileText />
+                      PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <ThemeSelector />
+              </div>
+            </div>
+
+            <div className="space-y-1 px-1">
+              <h1 className="m-0 truncate text-sm font-semibold leading-tight tracking-tight">
+                {state.deck.title}
+              </h1>
+              <div className="flex items-center justify-between gap-2">
+                <p className="m-0 text-[11px] text-muted-foreground">
+                  Slide {activeSlideIndex + 1} of {state.slides.length}
+                </p>
+                {isReadOnly ? null : (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className={`m-0 text-[11px] tabular-nums ${
+                      saveStatus === "failed"
+                        ? "font-medium text-destructive"
+                        : "text-muted-foreground"
+                    }`}
+                    data-testid="save-status"
+                  >
+                    {formatSaveStatus(saveStatus)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
+            <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
               Slides
             </span>
             <div className="flex items-center gap-0.5">
@@ -811,6 +960,7 @@ export function EditorPage() {
               ) : null}
             </div>
           </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             <DndContext
               sensors={slideSensors}
@@ -834,9 +984,7 @@ export function EditorPage() {
                       isReadOnly={isReadOnly || isSlideReordering}
                       isDragging={activeDragSlideId === slide.id}
                       slideCount={state.slides.length}
-                      isPreviewOpen={
-                        previewSession?.slideId === slide.id
-                      }
+                      isPreviewOpen={previewSession?.slideId === slide.id}
                       previewSession={
                         previewSession?.slideId === slide.id
                           ? previewSession
@@ -883,124 +1031,63 @@ export function EditorPage() {
               </DragOverlay>
             </DndContext>
           </div>
+
+          {!isReadOnly ? (
+            <div className="shrink-0 border-t border-border px-2.5 py-2">
+              <EditorDrawingTools
+                activeTool={activeTool}
+                zoomPercent={zoomPercent}
+                disabled={isReadOnlyTooling()}
+                onSelectTool={handleSelectTool}
+                onUndo={() => {
+                  clickExcalidrawControl("button-undo");
+                }}
+                onRedo={() => {
+                  clickExcalidrawControl("button-redo");
+                }}
+                onZoomIn={() => {
+                  handleZoomBy(1.1);
+                }}
+                onZoomOut={() => {
+                  handleZoomBy(1 / 1.1);
+                }}
+                onResetZoom={handleResetZoom}
+              />
+            </div>
+          ) : null}
         </aside>
-      ) : null}
+      ) : (
+        <aside
+          className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-border bg-muted/20 py-2"
+          aria-label="Editor controls"
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Open sidebar"
+            title="Open sidebar"
+            aria-expanded={false}
+            onClick={handleSidebarToggle}
+          >
+            <PanelLeftOpen />
+            <span className="sr-only">Open sidebar</span>
+          </Button>
+          <Button type="button" variant="ghost" size="icon-sm" asChild>
+            <Link
+              to="/"
+              aria-label="Home"
+              title="Home"
+              onClick={(event) => void handleHomeClick(event)}
+            >
+              <Home />
+              <span className="sr-only">Home</span>
+            </Link>
+          </Button>
+        </aside>
+      )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
-          <div className="flex shrink-0 items-center gap-0.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-              title={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-              aria-expanded={sidebarOpen}
-              onClick={handleSidebarToggle}
-            >
-              {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-              <span className="sr-only">
-                {sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-              </span>
-            </Button>
-            <Button type="button" variant="ghost" size="icon-sm" asChild>
-              <Link
-                to="/"
-                aria-label="Home"
-                title="Home"
-                onClick={(event) => void handleHomeClick(event)}
-              >
-                <Home />
-                <span className="sr-only">Home</span>
-              </Link>
-            </Button>
-          </div>
-
-          <Separator
-            orientation="vertical"
-            className="data-vertical:h-4 data-vertical:self-center"
-          />
-
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <h1 className="m-0 min-w-0 truncate text-sm font-semibold leading-none tracking-tight">
-              {state.deck.title}
-            </h1>
-            <span
-              className="h-1 w-1 shrink-0 rounded-full bg-border"
-              aria-hidden="true"
-            />
-            <p className="m-0 shrink-0 text-xs text-muted-foreground">
-              Slide {activeSlideIndex + 1} of {state.slides.length}
-            </p>
-            {isReadOnly ? null : (
-              <>
-                <span
-                  className="h-1 w-1 shrink-0 rounded-full bg-border"
-                  aria-hidden="true"
-                />
-                <p
-                  role="status"
-                  aria-live="polite"
-                  className={`m-0 shrink-0 text-xs tabular-nums ${
-                    saveStatus === "failed"
-                      ? "font-medium text-destructive"
-                      : "text-muted-foreground"
-                  }`}
-                  data-testid="save-status"
-                >
-                  {formatSaveStatus(saveStatus)}
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => handlePresentClick()}
-            >
-              <Presentation />
-              Present
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5"
-                  aria-label={exporting ? "Exporting deck" : "Export deck"}
-                  title={exporting ? "Exporting deck" : "Export deck"}
-                  disabled={exporting}
-                >
-                  {exporting ? (
-                    <LoaderCircle className="animate-spin" />
-                  ) : (
-                    <Download />
-                  )}
-                  {exporting ? "Exporting…" : "Export"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onSelect={() => setPendingExportFormat("slaide")}
-                >
-                  <FileJson />
-                  SLAIDE
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setPendingExportFormat("pdf")}>
-                  <FileText />
-                  PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <ThemeSelector labeled />
-          </div>
-        </header>
-
         {isReadOnly ? (
           <Alert
             className="rounded-none border-x-0 border-t-0"
@@ -1162,6 +1249,8 @@ export function EditorPage() {
               );
               requestAnimationFrame(() => {
                 slideConstraintsRef.current?.fitSlideToViewport();
+                const { zoom } = api.getAppState();
+                setZoomPercent(Math.round(zoom.value * 100));
               });
               window.__slaideTest = {
                 addRectangle() {
@@ -1260,6 +1349,11 @@ export function EditorPage() {
             }
             onChange={(elements, appState, files) => {
               if (isReadOnly) return;
+              const toolType = appState.activeTool?.type;
+              if (typeof toolType === "string") {
+                setActiveTool(toolType);
+              }
+              setZoomPercent(Math.round(appState.zoom.value * 100));
               const nextTheme = appState.theme;
               if (nextTheme === "light" || nextTheme === "dark") {
                 if (nextTheme === themeFromAppRef.current) {
