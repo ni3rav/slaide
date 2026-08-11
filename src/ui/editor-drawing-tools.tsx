@@ -299,8 +299,8 @@ export function EditorDrawingTools({
   const canGroup = selectionCount >= 2
 
   return (
-    <div className="flex flex-col gap-2">
-      <section aria-label="Drawing tools" className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5">
+      <section aria-label="Drawing tools" className="flex flex-col gap-1">
         <p className="m-0 px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
           Tools
         </p>
@@ -330,7 +330,11 @@ export function EditorDrawingTools({
               label="Markup tools"
             />
             <div className="h-px bg-border/70" aria-hidden="true" />
-            <div role="group" aria-label="Library tools" className="flex flex-wrap gap-0.5">
+            <div
+              role="group"
+              aria-label="Library and arrange"
+              className="flex flex-wrap gap-0.5"
+            >
               <ActionButton
                 label="Library"
                 testId="editor-tool-library"
@@ -342,18 +346,6 @@ export function EditorDrawingTools({
                 className="sidebar-trigger"
                 onClick={onToggleLibrary}
               />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section aria-label="Arrange" className="flex flex-col gap-1.5">
-        <p className="m-0 px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-          Arrange
-        </p>
-        <div className="rounded-lg border border-border/80 bg-muted/40 p-1">
-          <div className="flex flex-col gap-1">
-            <div role="group" aria-label="Group" className="flex flex-wrap gap-0.5">
               <ActionButton
                 label="Group selection"
                 shortcut="Ctrl+G"
@@ -370,9 +362,6 @@ export function EditorDrawingTools({
                 disabled={disabled || !canUngroup}
                 onClick={onUngroup}
               />
-            </div>
-            <div className="h-px bg-border/70" aria-hidden="true" />
-            <div role="group" aria-label="Layers" className="flex flex-wrap gap-0.5">
               <ActionButton
                 label="Send to back"
                 shortcut="Ctrl+Shift+["
@@ -412,61 +401,59 @@ export function EditorDrawingTools({
 
       <section
         aria-label="Canvas controls"
-        className="flex flex-col gap-1 rounded-lg border border-border/80 bg-muted/40 p-1"
+        className="flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1"
       >
-        <div className="flex items-center gap-1">
-          <div role="group" aria-label="History" className="flex gap-0.5">
-            <ActionButton
-              label="Undo"
-              testId="editor-action-undo"
-              icon={<Undo2 />}
-              disabled={disabled}
-              onClick={onUndo}
-            />
-            <ActionButton
-              label="Redo"
-              testId="editor-action-redo"
-              icon={<Redo2 />}
-              disabled={disabled}
-              onClick={onRedo}
-            />
-          </div>
-
-          <div className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
-
-          <div
-            role="group"
-            aria-label="Zoom"
-            className="flex min-w-0 flex-1 items-center gap-0.5"
-          >
-            <ActionButton
-              label="Zoom out"
-              testId="editor-action-zoom-out"
-              icon={<ZoomOut />}
-              onClick={onZoomOut}
-            />
-            <button
-              type="button"
-              className="m-0 min-w-0 flex-1 rounded-md px-1 py-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Reset zoom"
-              title="Reset zoom"
-              data-testid="editor-action-reset-zoom"
-              onClick={onResetZoom}
-            >
-              {zoomPercent}%
-            </button>
-            <ActionButton
-              label="Zoom in"
-              testId="editor-action-zoom-in"
-              icon={<ZoomIn />}
-              onClick={onZoomIn}
-            />
-          </div>
+        <div role="group" aria-label="History" className="flex gap-0.5">
+          <ActionButton
+            label="Undo"
+            testId="editor-action-undo"
+            icon={<Undo2 />}
+            disabled={disabled}
+            onClick={onUndo}
+          />
+          <ActionButton
+            label="Redo"
+            testId="editor-action-redo"
+            icon={<Redo2 />}
+            disabled={disabled}
+            onClick={onRedo}
+          />
         </div>
 
-        <div className="h-px bg-border/70" aria-hidden="true" />
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
 
-        <div role="group" aria-label="View" className="flex flex-wrap gap-0.5">
+        <div
+          role="group"
+          aria-label="Zoom"
+          className="flex min-w-0 flex-1 items-center gap-0.5"
+        >
+          <ActionButton
+            label="Zoom out"
+            testId="editor-action-zoom-out"
+            icon={<ZoomOut />}
+            onClick={onZoomOut}
+          />
+          <button
+            type="button"
+            className="m-0 min-w-0 flex-1 rounded-md px-1 py-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Reset zoom"
+            title="Reset zoom"
+            data-testid="editor-action-reset-zoom"
+            onClick={onResetZoom}
+          >
+            {zoomPercent}%
+          </button>
+          <ActionButton
+            label="Zoom in"
+            testId="editor-action-zoom-in"
+            icon={<ZoomIn />}
+            onClick={onZoomIn}
+          />
+        </div>
+
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
+
+        <div role="group" aria-label="View" className="flex gap-0.5">
           <ActionButton
             label="Toggle grid"
             shortcut="Ctrl+'"

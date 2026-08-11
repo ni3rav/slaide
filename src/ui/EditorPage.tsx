@@ -1012,7 +1012,7 @@ export function EditorPage() {
           </section>
 
           {!isReadOnly ? (
-            <section className="shrink-0 border-b border-sidebar-border px-2.5 py-2.5">
+            <section className="max-h-[38%] shrink-0 overflow-y-auto border-b border-sidebar-border px-2.5 py-2">
               <EditorDrawingTools
                 activeTool={activeTool}
                 libraryOpen={libraryOpen}
