@@ -6,9 +6,11 @@ import {
   Eraser,
   Hand,
   ImageIcon,
+  LassoSelect,
   Library,
   Minus,
   MousePointer2,
+  PaintBucket,
   Pencil,
   Redo2,
   Shapes,
@@ -23,6 +25,7 @@ import { cn } from '@/lib/utils'
 
 export type DrawingToolType =
   | 'selection'
+  | 'lasso'
   | 'hand'
   | 'rectangle'
   | 'diamond'
@@ -34,6 +37,7 @@ export type DrawingToolType =
   | 'text'
   | 'image'
   | 'eraser'
+  | 'bucketfill'
 
 type ToolDefinition = {
   type: DrawingToolType
@@ -49,6 +53,12 @@ const NAV_TOOLS: ToolDefinition[] = [
     label: 'Selection',
     testId: 'editor-tool-selection',
     icon: <MousePointer2 />,
+  },
+  {
+    type: 'lasso',
+    label: 'Lasso select',
+    testId: 'editor-tool-lasso',
+    icon: <LassoSelect />,
   },
   {
     type: 'hand',
@@ -122,6 +132,13 @@ const MARKUP_TOOLS: ToolDefinition[] = [
     label: 'Eraser',
     testId: 'editor-tool-eraser',
     icon: <Eraser />,
+  },
+  {
+    type: 'bucketfill',
+    label: 'Bucket fill',
+    shortcut: 'B',
+    testId: 'editor-tool-bucketfill',
+    icon: <PaintBucket />,
   },
 ]
 

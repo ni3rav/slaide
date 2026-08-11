@@ -127,6 +127,7 @@ type SlaideTestApi = {
   getSceneElementCount: () => number;
   getActiveTool: () => string;
   getElementTypes: () => string[];
+  getSelectedElementIds: () => string[];
   getCamera: () => { scrollX: number; scrollY: number; zoom: number };
   getViewport: () => { width: number; height: number };
   getElementGeometry: () => Array<{
@@ -779,6 +780,15 @@ export function EditorPage() {
     const api = excalidrawApiRef.current;
     if (!api || isReadOnlyTooling()) return;
     api.setActiveTool({ type: tool });
+    // Keep Excalidraw's preferred selection tool in sync so the V shortcut
+    // and selection-tool affordances match the sidebar choice.
+    if (tool === "selection" || tool === "lasso") {
+      api.updateScene({
+        appState: {
+          preferredSelectionTool: { type: tool, initialized: true },
+        },
+      });
+    }
     setActiveTool(tool);
   }
 
@@ -1305,9 +1315,12 @@ export function EditorPage() {
               },
               tools: {
                 image: !isReadOnly,
-                // Keep Draw to Shape activatable (Shift+X / sidebar). Do not
-                // set autoshape:false — that disables the tool and shortcut.
-                ...(!isReadOnly ? { autoshape: true } : {}),
+                // Keep Draw to Shape / lasso / bucket fill activatable from the
+                // sidebar (and their shortcuts). Setting any of these to false
+                // disables the tool via isToolSupported.
+                ...(!isReadOnly
+                  ? { autoshape: true, lasso: true, bucketfill: true }
+                  : {}),
               } as { image: boolean },
             }}
             aiEnabled={false}
@@ -1408,6 +1421,9 @@ export function EditorPage() {
                     .getSceneElements()
                     .filter((element) => !element.isDeleted)
                     .map((element) => element.type);
+                },
+                getSelectedElementIds() {
+                  return Object.keys(api.getAppState().selectedElementIds);
                 },
                 getCamera() {
                   const { scrollX, scrollY, zoom } = api.getAppState();
