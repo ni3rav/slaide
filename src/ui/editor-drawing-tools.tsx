@@ -1,9 +1,14 @@
 import type { ReactNode } from 'react'
 import {
   ArrowUpRight,
+  BringToFront,
+  ChevronsDown,
+  ChevronsUp,
   Circle,
   Diamond,
   Eraser,
+  Grid2x2,
+  Group,
   Hand,
   ImageIcon,
   LassoSelect,
@@ -13,10 +18,12 @@ import {
   PaintBucket,
   Pencil,
   Redo2,
+  SendToBack,
   Shapes,
   Square,
   Type,
   Undo2,
+  Ungroup,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -142,18 +149,75 @@ const MARKUP_TOOLS: ToolDefinition[] = [
   },
 ]
 
+type ActionButtonProps = {
+  label: string
+  testId: string
+  icon: ReactNode
+  shortcut?: string
+  disabled?: boolean
+  pressed?: boolean
+  className?: string
+  onClick: () => void
+}
+
 type EditorDrawingToolsProps = {
   activeTool: string
   disabled?: boolean
   libraryOpen?: boolean
+  gridEnabled?: boolean
+  selectionCount?: number
+  canUngroup?: boolean
   onSelectTool: (tool: DrawingToolType) => void
   onToggleLibrary: () => void
+  onGroup: () => void
+  onUngroup: () => void
+  onBringToFront: () => void
+  onBringForward: () => void
+  onSendBackward: () => void
+  onSendToBack: () => void
+  onToggleGrid: () => void
   onUndo: () => void
   onRedo: () => void
   onZoomIn: () => void
   onZoomOut: () => void
   onResetZoom: () => void
   zoomPercent: number
+}
+
+function ActionButton({
+  label,
+  testId,
+  icon,
+  shortcut,
+  disabled = false,
+  pressed,
+  className,
+  onClick,
+}: ActionButtonProps) {
+  const title = shortcut ? `${label} (${shortcut})` : label
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      data-testid={testId}
+      aria-label={label}
+      title={title}
+      aria-keyshortcuts={shortcut}
+      aria-pressed={pressed}
+      disabled={disabled}
+      className={cn(
+        'size-7 text-muted-foreground hover:bg-background hover:text-foreground',
+        pressed &&
+          'bg-background text-foreground shadow-xs ring-1 ring-border',
+        className,
+      )}
+      onClick={onClick}
+    >
+      {icon}
+      <span className="sr-only">{title}</span>
+    </Button>
+  )
 }
 
 function ToolButton({
@@ -167,28 +231,16 @@ function ToolButton({
   disabled: boolean
   onSelectTool: (tool: DrawingToolType) => void
 }) {
-  const title = tool.shortcut ? `${tool.label} (${tool.shortcut})` : tool.label
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      data-testid={tool.testId}
-      aria-label={tool.label}
-      title={title}
-      aria-keyshortcuts={tool.shortcut}
-      aria-pressed={isActive}
+    <ActionButton
+      label={tool.label}
+      testId={tool.testId}
+      icon={tool.icon}
+      shortcut={tool.shortcut}
       disabled={disabled}
-      className={cn(
-        'size-7 text-muted-foreground hover:bg-background hover:text-foreground',
-        isActive &&
-          'bg-background text-foreground shadow-xs ring-1 ring-border',
-      )}
+      pressed={isActive}
       onClick={() => onSelectTool(tool.type)}
-    >
-      {tool.icon}
-      <span className="sr-only">{title}</span>
-    </Button>
+    />
   )
 }
 
@@ -224,8 +276,18 @@ export function EditorDrawingTools({
   activeTool,
   disabled = false,
   libraryOpen = false,
+  gridEnabled = false,
+  selectionCount = 0,
+  canUngroup = false,
   onSelectTool,
   onToggleLibrary,
+  onGroup,
+  onUngroup,
+  onBringToFront,
+  onBringForward,
+  onSendBackward,
+  onSendToBack,
+  onToggleGrid,
   onUndo,
   onRedo,
   onZoomIn,
@@ -233,6 +295,9 @@ export function EditorDrawingTools({
   onResetZoom,
   zoomPercent,
 }: EditorDrawingToolsProps) {
+  const hasSelection = selectionCount > 0
+  const canGroup = selectionCount >= 2
+
   return (
     <div className="flex flex-col gap-2">
       <section aria-label="Drawing tools" className="flex flex-col gap-1.5">
@@ -266,27 +331,80 @@ export function EditorDrawingTools({
             />
             <div className="h-px bg-border/70" aria-hidden="true" />
             <div role="group" aria-label="Library tools" className="flex flex-wrap gap-0.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                data-testid="editor-tool-library"
-                aria-label="Library"
-                title="Library"
-                aria-pressed={libraryOpen}
+              <ActionButton
+                label="Library"
+                testId="editor-tool-library"
+                icon={<Library />}
                 disabled={disabled}
-                className={cn(
-                  // Excalidraw Sidebar outside-click ignores .sidebar-trigger so
-                  // our toggle can close the panel instead of racing a reopen.
-                  'sidebar-trigger size-7 text-muted-foreground hover:bg-background hover:text-foreground',
-                  libraryOpen &&
-                    'bg-background text-foreground shadow-xs ring-1 ring-border',
-                )}
+                pressed={libraryOpen}
+                // Excalidraw Sidebar outside-click ignores .sidebar-trigger so
+                // our toggle can close the panel instead of racing a reopen.
+                className="sidebar-trigger"
                 onClick={onToggleLibrary}
-              >
-                <Library />
-                <span className="sr-only">Library</span>
-              </Button>
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Arrange" className="flex flex-col gap-1.5">
+        <p className="m-0 px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+          Arrange
+        </p>
+        <div className="rounded-lg border border-border/80 bg-muted/40 p-1">
+          <div className="flex flex-col gap-1">
+            <div role="group" aria-label="Group" className="flex flex-wrap gap-0.5">
+              <ActionButton
+                label="Group selection"
+                shortcut="Ctrl+G"
+                testId="editor-action-group"
+                icon={<Group />}
+                disabled={disabled || !canGroup}
+                onClick={onGroup}
+              />
+              <ActionButton
+                label="Ungroup selection"
+                shortcut="Ctrl+Shift+G"
+                testId="editor-action-ungroup"
+                icon={<Ungroup />}
+                disabled={disabled || !canUngroup}
+                onClick={onUngroup}
+              />
+            </div>
+            <div className="h-px bg-border/70" aria-hidden="true" />
+            <div role="group" aria-label="Layers" className="flex flex-wrap gap-0.5">
+              <ActionButton
+                label="Send to back"
+                shortcut="Ctrl+Shift+["
+                testId="editor-action-send-to-back"
+                icon={<SendToBack />}
+                disabled={disabled || !hasSelection}
+                onClick={onSendToBack}
+              />
+              <ActionButton
+                label="Send backward"
+                shortcut="Ctrl+["
+                testId="editor-action-send-backward"
+                icon={<ChevronsDown />}
+                disabled={disabled || !hasSelection}
+                onClick={onSendBackward}
+              />
+              <ActionButton
+                label="Bring forward"
+                shortcut="Ctrl+]"
+                testId="editor-action-bring-forward"
+                icon={<ChevronsUp />}
+                disabled={disabled || !hasSelection}
+                onClick={onBringForward}
+              />
+              <ActionButton
+                label="Bring to front"
+                shortcut="Ctrl+Shift+]"
+                testId="editor-action-bring-to-front"
+                icon={<BringToFront />}
+                disabled={disabled || !hasSelection}
+                onClick={onBringToFront}
+              />
             </div>
           </div>
         </div>
@@ -294,77 +412,70 @@ export function EditorDrawingTools({
 
       <section
         aria-label="Canvas controls"
-        className="flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1"
+        className="flex flex-col gap-1 rounded-lg border border-border/80 bg-muted/40 p-1"
       >
-        <div role="group" aria-label="History" className="flex gap-0.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
-            aria-label="Undo"
-            title="Undo"
-            disabled={disabled}
-            onClick={onUndo}
+        <div className="flex items-center gap-1">
+          <div role="group" aria-label="History" className="flex gap-0.5">
+            <ActionButton
+              label="Undo"
+              testId="editor-action-undo"
+              icon={<Undo2 />}
+              disabled={disabled}
+              onClick={onUndo}
+            />
+            <ActionButton
+              label="Redo"
+              testId="editor-action-redo"
+              icon={<Redo2 />}
+              disabled={disabled}
+              onClick={onRedo}
+            />
+          </div>
+
+          <div className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
+
+          <div
+            role="group"
+            aria-label="Zoom"
+            className="flex min-w-0 flex-1 items-center gap-0.5"
           >
-            <Undo2 />
-            <span className="sr-only">Undo</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
-            aria-label="Redo"
-            title="Redo"
-            disabled={disabled}
-            onClick={onRedo}
-          >
-            <Redo2 />
-            <span className="sr-only">Redo</span>
-          </Button>
+            <ActionButton
+              label="Zoom out"
+              testId="editor-action-zoom-out"
+              icon={<ZoomOut />}
+              onClick={onZoomOut}
+            />
+            <button
+              type="button"
+              className="m-0 min-w-0 flex-1 rounded-md px-1 py-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+              data-testid="editor-action-reset-zoom"
+              onClick={onResetZoom}
+            >
+              {zoomPercent}%
+            </button>
+            <ActionButton
+              label="Zoom in"
+              testId="editor-action-zoom-in"
+              icon={<ZoomIn />}
+              onClick={onZoomIn}
+            />
+          </div>
         </div>
 
-        <div className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
+        <div className="h-px bg-border/70" aria-hidden="true" />
 
-        <div
-          role="group"
-          aria-label="Zoom"
-          className="flex min-w-0 flex-1 items-center gap-0.5"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
-            aria-label="Zoom out"
-            title="Zoom out"
-            onClick={onZoomOut}
-          >
-            <ZoomOut />
-            <span className="sr-only">Zoom out</span>
-          </Button>
-          <button
-            type="button"
-            className="m-0 min-w-0 flex-1 rounded-md px-1 py-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Reset zoom"
-            title="Reset zoom"
-            onClick={onResetZoom}
-          >
-            {zoomPercent}%
-          </button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-7 text-muted-foreground hover:bg-background hover:text-foreground"
-            aria-label="Zoom in"
-            title="Zoom in"
-            onClick={onZoomIn}
-          >
-            <ZoomIn />
-            <span className="sr-only">Zoom in</span>
-          </Button>
+        <div role="group" aria-label="View" className="flex flex-wrap gap-0.5">
+          <ActionButton
+            label="Toggle grid"
+            shortcut="Ctrl+'"
+            testId="editor-action-toggle-grid"
+            icon={<Grid2x2 />}
+            disabled={disabled}
+            pressed={gridEnabled}
+            onClick={onToggleGrid}
+          />
         </div>
       </section>
     </div>
@@ -375,4 +486,94 @@ export function clickExcalidrawControl(testId: string): void {
   const host = document.querySelector('[data-testid="excalidraw-host"]')
   const control = host?.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
   control?.click()
+}
+
+/** Click an Excalidraw chrome control matched by accessible name / title. */
+export function clickExcalidrawLabeledControl(label: string): boolean {
+  const host = document.querySelector('[data-testid="excalidraw-host"]')
+  if (!host) return false
+  const controls = host.querySelectorAll<HTMLElement>('button, [role="button"]')
+  for (const control of controls) {
+    if (!isVisibleControl(control)) continue
+    const ariaLabel = control.getAttribute('aria-label')
+    const title = control.getAttribute('title') ?? ''
+    if (
+      ariaLabel === label ||
+      title === label ||
+      title.startsWith(`${label} —`) ||
+      title.startsWith(`${label} -`) ||
+      title.startsWith(`${label} `)
+    ) {
+      control.click()
+      return true
+    }
+  }
+  return false
+}
+
+function isVisibleControl(control: HTMLElement): boolean {
+  if (control.hidden || control.getAttribute('aria-hidden') === 'true') {
+    return false
+  }
+  // Visually-hidden Excalidraw footer controls (undo/redo) stay actionable.
+  if (control.closest('.layer-ui__wrapper__footer-left, .layer-ui__wrapper__footer-right')) {
+    return true
+  }
+  const style = window.getComputedStyle(control)
+  return style.display !== 'none' && style.visibility !== 'hidden'
+}
+
+type ArrangeShortcut = {
+  key: string
+  code: string
+  shiftKey?: boolean
+  altKey?: boolean
+}
+
+const ARRANGE_SHORTCUTS: Record<string, ArrangeShortcut> = {
+  'Group selection': { key: 'g', code: 'KeyG' },
+  'Ungroup selection': { key: 'G', code: 'KeyG', shiftKey: true },
+  'Send backward': { key: '[', code: 'BracketLeft' },
+  'Bring forward': { key: ']', code: 'BracketRight' },
+  'Send to back': { key: '[', code: 'BracketLeft', shiftKey: true },
+  'Bring to front': { key: ']', code: 'BracketRight', shiftKey: true },
+}
+
+function isApplePlatform(): boolean {
+  return /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+}
+
+/** Run a labeled arrange action via Excalidraw UI, falling back to shortcuts. */
+export function runExcalidrawArrangeAction(label: string): void {
+  if (clickExcalidrawLabeledControl(label)) return
+  const shortcut = ARRANGE_SHORTCUTS[label]
+  if (!shortcut) return
+  const apple = isApplePlatform()
+  const useAltForEnds =
+    apple && (label === 'Send to back' || label === 'Bring to front')
+  const canvas = document.querySelector<HTMLElement>(
+    '.excalidraw .excalidraw__canvas.interactive',
+  )
+  canvas?.focus()
+  const eventInit: KeyboardEventInit = {
+    key: shortcut.key,
+    code: shortcut.code,
+    ctrlKey: !apple,
+    metaKey: apple,
+    shiftKey: useAltForEnds ? false : Boolean(shortcut.shiftKey),
+    altKey: useAltForEnds ? true : Boolean(shortcut.altKey),
+    bubbles: true,
+    cancelable: true,
+  }
+  const event = new KeyboardEvent('keydown', eventInit)
+  const targets: EventTarget[] = []
+  if (canvas) targets.push(canvas)
+  const root = document.querySelector('.excalidraw')
+  if (root) targets.push(root)
+  targets.push(document)
+  targets.push(window)
+  for (const target of targets) {
+    target.dispatchEvent(new KeyboardEvent('keydown', eventInit))
+  }
+  void event
 }

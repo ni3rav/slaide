@@ -105,6 +105,7 @@ import type { DeckTheme } from "../storage/deck-repository.ts";
 import {
   EditorDrawingTools,
   clickExcalidrawControl,
+  runExcalidrawArrangeAction,
   type DrawingToolType,
 } from "./editor-drawing-tools.tsx";
 
@@ -128,6 +129,10 @@ type SlaideTestApi = {
   getActiveTool: () => string;
   getElementTypes: () => string[];
   getSelectedElementIds: () => string[];
+  getElementIds: () => string[];
+  selectElements: (ids: string[]) => void;
+  getElementGroupIds: () => Record<string, string[]>;
+  isGridEnabled: () => boolean;
   getCamera: () => { scrollX: number; scrollY: number; zoom: number };
   getViewport: () => { width: number; height: number };
   getElementGeometry: () => Array<{
@@ -182,6 +187,9 @@ export function EditorPage() {
   >(null);
   const [activeTool, setActiveTool] = useState<string>("selection");
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [gridEnabled, setGridEnabled] = useState(false);
+  const [selectionCount, setSelectionCount] = useState(0);
+  const [canUngroup, setCanUngroup] = useState(false);
   const [libraryItems, setLibraryItems] = useState<LibraryItems>([]);
   const [libraryReady, setLibraryReady] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -792,6 +800,25 @@ export function EditorPage() {
     setActiveTool(tool);
   }
 
+  function handleToggleGrid() {
+    const api = excalidrawApiRef.current;
+    if (!api || isReadOnlyTooling()) return;
+    const next = !api.getAppState().gridModeEnabled;
+    api.updateScene({
+      appState: {
+        gridModeEnabled: next,
+        // Match Excalidraw's gridMode action: snap mode turns off with grid.
+        objectsSnapModeEnabled: false,
+      },
+    });
+    setGridEnabled(next);
+  }
+
+  function handleArrangeAction(label: string) {
+    if (isReadOnlyTooling()) return;
+    runExcalidrawArrangeAction(label);
+  }
+
   function handleToggleLibrary() {
     const api = excalidrawApiRef.current;
     if (!api || isReadOnlyTooling()) return;
@@ -989,10 +1016,20 @@ export function EditorPage() {
               <EditorDrawingTools
                 activeTool={activeTool}
                 libraryOpen={libraryOpen}
+                gridEnabled={gridEnabled}
+                selectionCount={selectionCount}
+                canUngroup={canUngroup}
                 zoomPercent={zoomPercent}
                 disabled={isReadOnlyTooling()}
                 onSelectTool={handleSelectTool}
                 onToggleLibrary={handleToggleLibrary}
+                onGroup={() => handleArrangeAction("Group selection")}
+                onUngroup={() => handleArrangeAction("Ungroup selection")}
+                onBringToFront={() => handleArrangeAction("Bring to front")}
+                onBringForward={() => handleArrangeAction("Bring forward")}
+                onSendBackward={() => handleArrangeAction("Send backward")}
+                onSendToBack={() => handleArrangeAction("Send to back")}
+                onToggleGrid={handleToggleGrid}
                 onUndo={() => {
                   clickExcalidrawControl("button-undo");
                 }}
@@ -1425,6 +1462,34 @@ export function EditorPage() {
                 getSelectedElementIds() {
                   return Object.keys(api.getAppState().selectedElementIds);
                 },
+                getElementIds() {
+                  return api
+                    .getSceneElements()
+                    .filter((element) => !element.isDeleted)
+                    .map((element) => element.id);
+                },
+                selectElements(ids) {
+                  const selectedElementIds = Object.fromEntries(
+                    ids.map((id) => [id, true as const]),
+                  );
+                  api.updateScene({
+                    appState: {
+                      selectedElementIds,
+                      selectedGroupIds: {},
+                    },
+                  });
+                },
+                getElementGroupIds() {
+                  const result: Record<string, string[]> = {};
+                  for (const element of api.getSceneElements()) {
+                    if (element.isDeleted) continue;
+                    result[element.id] = [...(element.groupIds ?? [])];
+                  }
+                  return result;
+                },
+                isGridEnabled() {
+                  return Boolean(api.getAppState().gridModeEnabled);
+                },
                 getCamera() {
                   const { scrollX, scrollY, zoom } = api.getAppState();
                   return { scrollX, scrollY, zoom: zoom.value };
@@ -1480,6 +1545,22 @@ export function EditorPage() {
               }
               setLibraryOpen(appState.openSidebar?.name === "default");
               setZoomPercent(Math.round(appState.zoom.value * 100));
+              setGridEnabled(Boolean(appState.gridModeEnabled));
+              const selectedIds = Object.keys(
+                appState.selectedElementIds ?? {},
+              ).filter((id) => appState.selectedElementIds?.[id]);
+              setSelectionCount(selectedIds.length);
+              const selectedGroups = appState.selectedGroupIds ?? {};
+              setCanUngroup(
+                Object.values(selectedGroups).some(Boolean) ||
+                  elements.some(
+                    (element) =>
+                      !element.isDeleted &&
+                      selectedIds.includes(element.id) &&
+                      Array.isArray(element.groupIds) &&
+                      element.groupIds.length > 0,
+                  ),
+              );
               const nextTheme = appState.theme;
               if (nextTheme === "light" || nextTheme === "dark") {
                 if (nextTheme === themeFromAppRef.current) {
