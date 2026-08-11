@@ -102,4 +102,83 @@ describe('renderSlideToPngBlob', () => {
     expect(nearOriginWhereBugWouldPlaceIt[1]).toBeGreaterThan(200)
     expect(nearOriginWhereBugWouldPlaceIt[2]).toBeLessThan(40)
   })
+
+  it('draws the grid when gridModeEnabled is set on the scene', async () => {
+    const scene: Scene = {
+      elements: [],
+      appState: {
+        viewBackgroundColor: '#ffffff',
+        gridModeEnabled: true,
+        gridSize: 20,
+        gridStep: 5,
+      },
+      files: {},
+    }
+
+    const blob = await renderSlideToPngBlob(scene)
+
+    // Mid-cell (10,10) stays near-white; a bold grid line at x=0 is darker.
+    const midCell = await samplePixel(blob, 10, 10)
+    expect(midCell[0]).toBeGreaterThan(240)
+    expect(midCell[1]).toBeGreaterThan(240)
+    expect(midCell[2]).toBeGreaterThan(240)
+
+    const onBoldGridLine = await samplePixel(blob, 0, 10)
+    expect(onBoldGridLine[0]).toBeLessThan(midCell[0]!)
+    expect(onBoldGridLine[1]).toBeLessThan(midCell[1]!)
+    expect(onBoldGridLine[2]).toBeLessThan(midCell[2]!)
+  })
+
+  it('keeps the grid under opaque elements', async () => {
+    const [rectangle] = convertToExcalidrawElements([
+      {
+        type: 'rectangle',
+        x: 0,
+        y: 0,
+        width: 40,
+        height: 40,
+        backgroundColor: '#ff0000',
+        strokeColor: '#ff0000',
+        fillStyle: 'solid',
+        roughness: 0,
+      },
+    ])
+
+    const scene: Scene = {
+      elements: [rectangle!],
+      appState: {
+        viewBackgroundColor: '#ffffff',
+        gridModeEnabled: true,
+        gridSize: 20,
+        gridStep: 5,
+      },
+      files: {},
+    }
+
+    const blob = await renderSlideToPngBlob(scene)
+    const onRectangle = await samplePixel(blob, 20, 20)
+    expect(onRectangle[0]).toBeGreaterThan(200)
+    expect(onRectangle[1]).toBeLessThan(40)
+    expect(onRectangle[2]).toBeLessThan(40)
+  })
+
+  it('omits the grid when gridModeEnabled is off', async () => {
+    const scene: Scene = {
+      elements: [],
+      appState: {
+        viewBackgroundColor: '#ffffff',
+        gridModeEnabled: false,
+        gridSize: 20,
+        gridStep: 5,
+      },
+      files: {},
+    }
+
+    const blob = await renderSlideToPngBlob(scene)
+    const midCell = await samplePixel(blob, 10, 10)
+    const onGridLine = await samplePixel(blob, 0, 10)
+    expect(onGridLine[0]).toBe(midCell[0])
+    expect(onGridLine[1]).toBe(midCell[1])
+    expect(onGridLine[2]).toBe(midCell[2])
+  })
 })
