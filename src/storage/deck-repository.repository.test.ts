@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { MAX_PRESENTER_NOTES_LENGTH } from '../slide/presenter-notes.ts'
 import { createDeckRepository, type Deck, type DeckRepository, type Slide } from './deck-repository.ts'
 
 describe('DeckRepository', () => {
@@ -205,6 +206,77 @@ describe('DeckRepository', () => {
     if (loaded.status !== 'ok') return
     expect(loaded.slides[0]?.scene).toEqual(scene)
     expect(loaded.deck.updatedAt).toBe(saved.updatedAt)
+  })
+
+  it('saves presenter notes without changing the scene', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.slides[0]!.id
+    const scene = {
+      elements: [{ id: 'rect-1', type: 'rectangle' }],
+      appState: { viewBackgroundColor: '#112233' },
+      files: {},
+    }
+    await repository.saveScene(slideId, scene)
+    await waitForNextTimestamp()
+
+    const saved = await repository.saveNotes(slideId, 'Cue the demo')
+    const loaded = await repository.loadDeck(created.deck.id)
+
+    expect(saved.notes).toBe('Cue the demo')
+    expect(saved.scene).toEqual(scene)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.slides[0]?.notes).toBe('Cue the demo')
+    expect(loaded.slides[0]?.scene).toEqual(scene)
+    expect(loaded.deck.updatedAt).toBe(saved.updatedAt)
+  })
+
+  it('keeps presenter notes when a scene save commits alongside them', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.slides[0]!.id
+    const scene = {
+      elements: [{ id: 'rect-1', type: 'rectangle' }],
+      appState: {},
+      files: {},
+    }
+
+    await Promise.all([
+      repository.saveNotes(slideId, 'Cue the demo'),
+      repository.saveScene(slideId, scene),
+    ])
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.slides[0]?.notes).toBe('Cue the demo')
+    expect(loaded.slides[0]?.scene).toEqual(scene)
+  })
+
+  it('rejects presenter notes that are too long', async () => {
+    const created = await repository.createDeck()
+
+    await expect(
+      repository.saveNotes(created.slides[0]!.id, 'a'.repeat(MAX_PRESENTER_NOTES_LENGTH + 1)),
+    ).rejects.toThrow('Presenter notes are invalid')
+  })
+
+  it('loads slides saved before presenter notes existed', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.slides[0]!.id
+    await removeSlideNotes(databaseName, slideId)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('ok')
+    if (loaded.status !== 'ok') return
+    expect(loaded.slides[0]?.notes).toBeUndefined()
+  })
+
+  it('reports corrupt when presenter notes are not text', async () => {
+    const created = await repository.createDeck()
+    await patchSlideNotes(databaseName, created.slides[0]!.id, 12)
+
+    const loaded = await repository.loadDeck(created.deck.id)
+    expect(loaded.status).toBe('corrupt')
   })
 
   it('rejects saveScene when the slide is missing', async () => {
@@ -645,6 +717,19 @@ describe('DeckRepository', () => {
     expect(duplicated.deck.updatedAt).toBeGreaterThanOrEqual(created.deck.updatedAt)
   })
 
+  it('copies presenter notes when duplicating a slide', async () => {
+    const created = await repository.createDeck()
+    const slideId = created.slides[0]!.id
+    await repository.saveNotes(slideId, 'Repeat the ask')
+
+    const duplicated = await repository.duplicateSlides(created.deck.id, [slideId])
+    const copyId = duplicated.deck.slideOrder.find((id) => id !== slideId)
+    const copy = duplicated.slides.find((slide) => slide.id === copyId)
+
+    expect(copy?.notes).toBe('Repeat the ask')
+    expect(copy?.id).not.toBe(slideId)
+  })
+
   it('rejects duplicateSlides when no slide ids are provided', async () => {
     const created = await repository.createDeck()
 
@@ -790,6 +875,48 @@ async function patchDeckSchemaVersion(
     }
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error ?? new Error('patch deck schema failed'))
+  })
+
+  db.close()
+}
+
+async function removeSlideNotes(databaseName: string, slideId: string): Promise<void> {
+  const db = await openTestDatabase(databaseName)
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('slides', 'readwrite')
+    const store = tx.objectStore('slides')
+    const getRequest = store.get(slideId)
+    getRequest.onsuccess = () => {
+      const slide = getRequest.result as { notes?: string }
+      delete slide.notes
+      store.put(slide)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('remove notes failed'))
+  })
+
+  db.close()
+}
+
+async function patchSlideNotes(
+  databaseName: string,
+  slideId: string,
+  notes: unknown,
+): Promise<void> {
+  const db = await openTestDatabase(databaseName)
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('slides', 'readwrite')
+    const store = tx.objectStore('slides')
+    const getRequest = store.get(slideId)
+    getRequest.onsuccess = () => {
+      const slide = getRequest.result as { notes?: unknown }
+      slide.notes = notes
+      store.put(slide)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('patch notes failed'))
   })
 
   db.close()

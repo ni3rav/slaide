@@ -195,6 +195,23 @@ describe('validateSlaideFile', () => {
     expect(() => validateSlaideFile(file)).toThrow(/missing binary file/i)
   })
 
+  it('preserves presenter notes and accepts slides that omit them', () => {
+    const file = validFile()
+    file.slides[0] = { ...slideOne, notes: 'Speak slowly' }
+
+    const validated = validateSlaideFile(file)
+
+    expect(validated.slides[0]?.notes).toBe('Speak slowly')
+    expect(validated.slides[1]?.notes).toBeUndefined()
+  })
+
+  it('rejects presenter notes that are not text', () => {
+    const file = validFile()
+    file.slides[0] = { ...slideOne, notes: 12 as never }
+
+    expect(() => validateSlaideFile(file)).toThrow(/presenter notes/i)
+  })
+
   it('rejects unsupported element types', () => {
     const file = validFile()
     file.slides[0] = {

@@ -1,3 +1,4 @@
+import { isPresenterNotesField, isPresenterNotesText } from '../slide/presenter-notes.ts'
 import { planSlideDeletion } from '../slide/slide-deletion.ts'
 import { planSlideDuplication } from '../slide/slide-duplication.ts'
 import { planSlideInsertion } from '../slide/slide-reorder.ts'
@@ -34,6 +35,8 @@ export type Slide = {
   schemaVersion: number
   deckId: DeckId
   scene: Scene
+  /** Plain text for the presenter window. Omitted on slides saved before notes existed. */
+  notes?: string
   createdAt: number
   updatedAt: number
 }
@@ -92,6 +95,7 @@ export type DeckRepository = {
   deleteDeck: (deckId: DeckId) => Promise<void>
   importDeck: (deck: Deck, slides: Slide[]) => Promise<ImportDeckResult>
   saveScene: (slideId: SlideId, scene: Scene) => Promise<Slide>
+  saveNotes: (slideId: SlideId, notes: string) => Promise<Slide>
   insertSlideAfter: (deckId: DeckId, afterSlideId: SlideId) => Promise<InsertedSlide>
   deleteSlides: (
     deckId: DeckId,
@@ -289,37 +293,27 @@ export async function createDeckRepository(
     },
 
     async saveScene(slideId, scene) {
-      const existing = await getRecord<Slide>(db, SLIDES_STORE, slideId)
-      if (!existing || !isValidSlide(existing, existing.deckId)) {
-        throw new Error('Slide not found')
+      return modifySlide(
+        db,
+        slideId,
+        (slide) => ({ ...slide, scene }),
+        'Failed to save scene',
+        'Scene save aborted',
+      )
+    },
+
+    async saveNotes(slideId, notes) {
+      if (!isPresenterNotesText(notes)) {
+        throw new Error('Presenter notes are invalid')
       }
 
-      const deck = await getRecord<Deck>(db, DECKS_STORE, existing.deckId)
-      if (!deck || !isValidDeck(deck)) {
-        throw new Error('Deck not found')
-      }
-
-      const now = Date.now()
-      const updatedSlide: Slide = {
-        ...existing,
-        scene,
-        updatedAt: now,
-      }
-      const updatedDeck: Deck = {
-        ...deck,
-        updatedAt: now,
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error ?? new Error('Failed to save scene'))
-        tx.onabort = () => reject(tx.error ?? new Error('Scene save aborted'))
-        tx.objectStore(SLIDES_STORE).put(updatedSlide)
-        tx.objectStore(DECKS_STORE).put(updatedDeck)
-      })
-
-      return updatedSlide
+      return modifySlide(
+        db,
+        slideId,
+        (slide) => ({ ...slide, notes }),
+        'Failed to save presenter notes',
+        'Presenter notes save aborted',
+      )
     },
 
     async insertSlideAfter(deckId, afterSlideId) {
@@ -537,7 +531,7 @@ export async function createDeckRepository(
 
       const copiedSlides: Slide[] = plan.copies.map(({ sourceId, copyId }) => {
         const source = sourceSlides.get(sourceId)!
-        return {
+        const copy: Slide = {
           id: copyId,
           schemaVersion: RECORD_SCHEMA_VERSION,
           deckId,
@@ -545,6 +539,10 @@ export async function createDeckRepository(
           createdAt: now,
           updatedAt: now,
         }
+        if (typeof source.notes === 'string') {
+          copy.notes = source.notes
+        }
+        return copy
       })
 
       const updatedDeck: Deck = {
@@ -635,6 +633,77 @@ export async function createDeckRepository(
   }
 }
 
+async function modifySlide(
+  db: IDBDatabase,
+  slideId: SlideId,
+  mutate: (slide: Slide) => Slide,
+  errorMessage: string,
+  abortMessage: string,
+): Promise<Slide> {
+  const existing = await getRecord<Slide>(db, SLIDES_STORE, slideId)
+  if (!existing || !isValidSlide(existing, existing.deckId)) {
+    throw new Error('Slide not found')
+  }
+
+  const deck = await getRecord<Deck>(db, DECKS_STORE, existing.deckId)
+  if (!deck || !isValidDeck(deck)) {
+    throw new Error('Deck not found')
+  }
+
+  const now = Date.now()
+  let updatedSlide: Slide | null = null
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    const fail = (error: Error) => {
+      if (settled) return
+      settled = true
+      reject(error)
+    }
+    const succeed = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+
+    const tx = db.transaction([DECKS_STORE, SLIDES_STORE], 'readwrite')
+    tx.oncomplete = () => succeed()
+    tx.onerror = () => fail(tx.error ?? new Error(errorMessage))
+    tx.onabort = () => fail(tx.error ?? new Error(abortMessage))
+
+    const slides = tx.objectStore(SLIDES_STORE)
+    const decks = tx.objectStore(DECKS_STORE)
+    const getSlide = slides.get(slideId)
+    getSlide.onsuccess = () => {
+      const latest = getSlide.result as Slide | undefined
+      if (!latest || !isValidSlide(latest, existing.deckId)) {
+        fail(new Error('Slide not found'))
+        tx.abort()
+        return
+      }
+
+      updatedSlide = { ...mutate(latest), updatedAt: now }
+      slides.put(updatedSlide)
+
+      const getDeck = decks.get(existing.deckId)
+      getDeck.onsuccess = () => {
+        const latestDeck = getDeck.result as Deck | undefined
+        if (!latestDeck || !isValidDeck(latestDeck)) {
+          fail(new Error('Deck not found'))
+          tx.abort()
+          return
+        }
+        decks.put({ ...latestDeck, updatedAt: now })
+      }
+    }
+  })
+
+  if (!updatedSlide) {
+    throw new Error(errorMessage)
+  }
+  return updatedSlide
+}
+
 function formatImportWriteError(error: unknown): Error {
   if (error instanceof DOMException && error.name === 'QuotaExceededError') {
     return new Error('Import failed because browser storage is full')
@@ -671,6 +740,7 @@ function isValidSlide(value: unknown, deckId: DeckId): value is Slide {
     slide.deckId === deckId &&
     typeof slide.createdAt === 'number' &&
     typeof slide.updatedAt === 'number' &&
+    isPresenterNotesField(slide.notes) &&
     isValidScene(slide.scene)
   )
 }

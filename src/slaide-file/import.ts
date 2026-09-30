@@ -1,4 +1,5 @@
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+import { isPresenterNotesField } from '../slide/presenter-notes.ts'
 import { allElementsInsideSlide } from '../slide/slide-element-bounds.ts'
 import type { Deck, Scene, Slide } from '../storage/deck-repository.ts'
 import { SLAIDE_FILE_FORMAT_VERSION, type SlaideFile } from './schema.ts'
@@ -83,9 +84,14 @@ export function validateSlaideFile(value: unknown): SlaideFile {
       slide.deckId !== deck.id ||
       typeof slide.createdAt !== 'number' ||
       typeof slide.updatedAt !== 'number' ||
+      !isPresenterNotesField(slide.notes) ||
       !isValidScene(slide.scene)
     ) {
-      throw new SlaideImportError('Import file contains invalid slide data')
+      throw new SlaideImportError(
+        slide.notes !== undefined && !isPresenterNotesField(slide.notes)
+          ? 'Import file contains invalid presenter notes'
+          : 'Import file contains invalid slide data',
+      )
     }
 
     if (slidesById.has(slide.id)) {
