@@ -60,9 +60,17 @@ The deck-management surface. It creates, opens, renames, exports, imports, and d
 
 The surface that combines the active Excalidraw scene with slide-management controls.
 
+### Presenter notes
+
+Plain text owned by a slide. Presenter notes are not part of the scene. Presentation images and PDF pages do not include them.
+
 ### Presentation mode
 
 A fullscreen or in-page display mode that navigates static presentation images.
+
+### Presenter view
+
+A second window that shows the current slide, the next slide, and that slide's presenter notes. It follows presentation mode.
 
 ## Invariants
 
@@ -77,6 +85,7 @@ A fullscreen or in-page display mode that navigates static presentation images.
 - Persistent deck changes are transactional.
 - One Slaide file contains one deck.
 - Preview and presentation images are temporary and their object URLs are revoked after use.
+- Presenter notes are not rendered into presentation images.
 
 ## Primary workflows
 
@@ -107,7 +116,8 @@ A fullscreen or in-page display mode that navigates static presentation images.
 2. Resolve the selected start point.
 3. Generate the starting presentation image.
 4. Enter fullscreen or use the in-page fallback.
-5. Generate adjacent images for the sliding window.
+5. Open the presenter view when the browser allows a second window.
+6. Generate adjacent images for the sliding window.
 
 ## Architectural decisions
 
@@ -117,3 +127,4 @@ A fullscreen or in-page display mode that navigates static presentation images.
 - [ADR-0004: Versioned Slaide import and export](docs/adr/0004-versioned-slaide-import-export.md)
 - [ADR-0005: Static-image presentation rendering](docs/adr/0005-static-image-presentation-rendering.md)
 - [ADR-0006: Raster PDF deck export](docs/adr/0006-raster-pdf-deck-export.md)
+- [ADR-0007: Presenter notes in a second window](docs/adr/0007-presenter-notes-in-a-second-window.md)

@@ -9,6 +9,8 @@ import {
 import { renderSlideToPngBlob } from '../presentation/slide-to-png.ts'
 import { useTheme } from './ThemeProvider.tsx'
 import { canAcceptPresentationNavigation } from '../presentation/presentation-navigation-throttle.ts'
+import { consumePresenterWindowBlocked } from '../presentation/open-presenter-window.ts'
+import { usePresenterSync } from '../presentation/use-presenter-sync.ts'
 import {
   exitPresentationFullscreen,
   requestPresentationFullscreen,
@@ -74,14 +76,19 @@ export function PresentationPage() {
   const exitingRef = useRef(false)
   const navigationRequestRef = useRef(0)
   const lastNavigationAtRef = useRef<number | null>(null)
+  const publishIndexRef = useRef<(index: number) => void>(() => {})
+  const publishExitRef = useRef<() => void>(() => {})
   const [state, setState] = useState<PresentationState>({ status: 'loading' })
+  const [presenterBlocked, setPresenterBlocked] = useState(consumePresenterWindowBlocked)
 
   useEffect(() => {
     themeRef.current = theme
   }, [theme])
 
   const exitPresentation = useCallback(() => {
+    if (exitingRef.current) return
     exitingRef.current = true
+    publishExitRef.current()
     fullscreenEnteredRef.current = false
     cacheRef.current?.revokeAll()
     cacheRef.current = null
@@ -273,7 +280,7 @@ export function PresentationPage() {
   }, [state])
 
   const goToSlide = useCallback(
-    (nextIndex: number) => {
+    (nextIndex: number, source: 'local' | 'remote' = 'local') => {
       if (
         state.status !== 'ready' ||
         nextIndex === state.currentIndex ||
@@ -284,11 +291,13 @@ export function PresentationPage() {
         return
       }
 
-      const now = Date.now()
-      if (!canAcceptPresentationNavigation(lastNavigationAtRef.current, now)) {
-        return
+      if (source === 'local') {
+        const now = Date.now()
+        if (!canAcceptPresentationNavigation(lastNavigationAtRef.current, now)) {
+          return
+        }
+        lastNavigationAtRef.current = now
       }
-      lastNavigationAtRef.current = now
 
       const slide = state.slides[nextIndex]
       if (!slide) return
@@ -310,6 +319,7 @@ export function PresentationPage() {
             }
           : previous,
       )
+      publishIndexRef.current(nextIndex)
 
       void (async () => {
         try {
@@ -344,6 +354,21 @@ export function PresentationPage() {
     },
     [state],
   )
+
+  const currentIndexRef = useRef(0)
+  if (state.status === 'ready') currentIndexRef.current = state.currentIndex
+
+  const presenterSync = usePresenterSync({
+    deckId,
+    role: 'audience',
+    enabled: state.status === 'ready',
+    getIndex: () => (state.status === 'ready' ? currentIndexRef.current : null),
+    onIndex: () => {},
+    onGo: (index) => goToSlide(index, 'remote'),
+    onExit: exitPresentation,
+  })
+  publishIndexRef.current = presenterSync.publishIndex
+  publishExitRef.current = presenterSync.publishExit
 
   const goNext = useCallback(() => {
     if (state.status !== 'ready') return
@@ -442,6 +467,31 @@ export function PresentationPage() {
       aria-label="Presentation mode"
       tabIndex={-1}
     >
+      {presenterBlocked ? (
+        <Alert
+          className="absolute top-4 right-16 z-10 max-w-sm border-white/15 bg-neutral-950/90 text-white"
+          role="status"
+          data-testid="presenter-blocked"
+        >
+          <AlertTitle>Presenter window blocked</AlertTitle>
+          <AlertDescription className="text-white/80">
+            The browser blocked the presenter window. Slides still show here.
+          </AlertDescription>
+          <AlertAction>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-white/70 hover:bg-white/10 hover:text-white"
+              aria-label="Dismiss presenter warning"
+              title="Dismiss presenter warning"
+              onClick={() => setPresenterBlocked(false)}
+            >
+              <X />
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : null}
       {fullscreenDenied && !fullscreenWarningDismissed ? (
         <Alert
           className="absolute top-4 left-4 z-10 max-w-md border-amber-500/50 bg-amber-950/90 text-amber-50"

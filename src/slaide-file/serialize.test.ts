@@ -59,6 +59,14 @@ describe('serializeDeckToSlaideFile', () => {
     expect(file.slides.map((slide) => slide.id)).toEqual(['slide-2', 'slide-1'])
   })
 
+  it('includes presenter notes when a slide has them', () => {
+    const file = serializeDeckToSlaideFile(deck, [{ ...slideOne, notes: 'Cue' }, slideTwo])
+    const exportedSlide = file.slides.find((slide) => slide.id === 'slide-1')
+
+    expect(exportedSlide?.notes).toBe('Cue')
+    expect(file.slides.find((slide) => slide.id === 'slide-2')?.notes).toBeUndefined()
+  })
+
   it('embeds scene elements, app state, and binary files', () => {
     const file = serializeDeckToSlaideFile(deck, [slideOne, slideTwo])
     const exportedSlide = file.slides.find((slide) => slide.id === 'slide-2')

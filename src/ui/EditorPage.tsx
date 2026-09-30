@@ -80,6 +80,15 @@ import {
   exitPresentationFullscreen,
   requestPresentationFullscreen,
 } from "../presentation/request-fullscreen.ts";
+import {
+  markPresenterWindowBlocked,
+  navigatePresenterWindow,
+  openPresenterWindow,
+} from "../presentation/open-presenter-window.ts";
+import {
+  MAX_PRESENTER_NOTES_LENGTH,
+  readPresenterNotes,
+} from "../slide/presenter-notes.ts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -199,6 +208,12 @@ export function EditorPage() {
   const autosaveRef = useRef<ReturnType<typeof createSceneAutosave> | null>(
     null,
   );
+  const notesDraftRef = useRef("");
+  const notesSlideIdRef = useRef<string | null>(null);
+  const notesSavedRef = useRef("");
+  const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushNotesRef = useRef<() => Promise<void>>(async () => {});
+  const [notesDraft, setNotesDraft] = useState("");
   const releaseLockRef = useRef<(() => void) | null>(null);
   const editSessionIdRef = useRef<number | null>(null);
   const takeoverCancelledRef = useRef(false);
@@ -479,6 +494,7 @@ export function EditorPage() {
     function handleVisibilityChange() {
       if (document.visibilityState === "hidden") {
         void autosave.flush().catch(() => undefined);
+        void flushNotesRef.current().catch(() => undefined);
       }
     }
 
@@ -496,6 +512,7 @@ export function EditorPage() {
         .flush()
         .catch(() => undefined)
         .finally(() => autosave.dispose());
+      void flushNotesRef.current().catch(() => undefined);
     };
   }, [
     repository,
@@ -503,6 +520,22 @@ export function EditorPage() {
     state.status === "ok" ? state.activeSlide.id : null,
     state.status === "ok" ? state.editMode : null,
   ]);
+
+  const activeNotesSlideId = state.status === "ok" ? state.activeSlide.id : null;
+  const activeStoredNotes =
+    state.status === "ok" ? readPresenterNotes(state.activeSlide.notes) : "";
+
+  useEffect(() => {
+    if (!activeNotesSlideId) return;
+    if (notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current);
+      notesTimerRef.current = null;
+    }
+    notesSlideIdRef.current = activeNotesSlideId;
+    notesDraftRef.current = activeStoredNotes;
+    notesSavedRef.current = activeStoredNotes;
+    setNotesDraft(activeStoredNotes);
+  }, [activeNotesSlideId, activeStoredNotes]);
 
   useEffect(() => {
     return () => {
@@ -513,13 +546,61 @@ export function EditorPage() {
     };
   }, []);
 
+  async function persistNotes(slideId: string, notes: string): Promise<void> {
+    if (notesSavedRef.current === notes && notesSlideIdRef.current === slideId) {
+      return;
+    }
+    setSaveStatus("saving");
+    try {
+      await repository.saveNotes(slideId, notes);
+      if (
+        notesSlideIdRef.current === slideId &&
+        notesDraftRef.current === notes
+      ) {
+        notesSavedRef.current = notes;
+        setSaveStatus("saved");
+      }
+    } catch {
+      setSaveStatus("failed");
+      throw new Error("Presenter notes save failed");
+    }
+  }
+
+  async function flushNotes(): Promise<void> {
+    if (notesTimerRef.current) {
+      clearTimeout(notesTimerRef.current);
+      notesTimerRef.current = null;
+    }
+    const slideId = notesSlideIdRef.current;
+    if (!slideId || state.status !== "ok" || state.editMode !== "editable") {
+      return;
+    }
+    await persistNotes(slideId, notesDraftRef.current);
+  }
+
+  flushNotesRef.current = flushNotes;
+
   async function flushActiveScene(): Promise<boolean> {
     try {
       await autosaveRef.current?.flush();
+      await flushNotes();
       return true;
     } catch {
       return false;
     }
+  }
+
+  function handleNotesChange(value: string) {
+    if (state.status !== "ok" || state.editMode !== "editable") return;
+    notesDraftRef.current = value;
+    notesSlideIdRef.current = state.activeSlide.id;
+    setNotesDraft(value);
+    if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
+    const slideId = state.activeSlide.id;
+    notesTimerRef.current = setTimeout(() => {
+      notesTimerRef.current = null;
+      void persistNotes(slideId, value).catch(() => undefined);
+    }, 500);
   }
 
   async function reloadDeck(activeSlideId: string): Promise<void> {
@@ -730,12 +811,12 @@ export function EditorPage() {
   async function handleHomeClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
     setLeaveWarning(false);
-    try {
-      await autosaveRef.current?.flush();
-      navigate("/");
-    } catch {
+    const saved = await flushActiveScene();
+    if (!saved) {
       setLeaveWarning(true);
+      return;
     }
+    navigate("/");
   }
 
   async function startPresentation(startIndex: number) {
@@ -743,23 +824,34 @@ export function EditorPage() {
     setPresentError(false);
     setPresentStartDialogOpen(false);
 
-    // Request fullscreen synchronously, before any await, so real browsers
-    // still see the Present click's user activation. The fullscreen state
-    // survives the SPA navigation to the presentation route.
+    // Open the presenter window and request fullscreen synchronously, before
+    // any await, so the browser still treats this click as the user gesture.
+    let presenterWindow: Window | null = null;
+    try {
+      presenterWindow = openPresenterWindow(deckId);
+    } catch {
+      presenterWindow = null;
+    }
     const fullscreenRequest = requestPresentationFullscreen(
       document.documentElement,
     );
 
     if (state.editMode === "editable") {
-      try {
-        await autosaveRef.current?.flush();
-      } catch {
+      const saved = await flushActiveScene();
+      if (!saved) {
+        presenterWindow?.close();
         setPresentError(true);
         void fullscreenRequest.then((result) => {
           if (result.status === "entered") void exitPresentationFullscreen();
         });
         return;
       }
+    }
+
+    if (presenterWindow && !presenterWindow.closed) {
+      navigatePresenterWindow(presenterWindow, deckId, startIndex);
+    } else {
+      markPresenterWindowBlocked();
     }
 
     navigate(`/decks/${deckId}/present?start=${startIndex}`);
@@ -871,9 +963,8 @@ export function EditorPage() {
 
     try {
       if (state.editMode === "editable") {
-        try {
-          await autosaveRef.current?.flush();
-        } catch {
+        const saved = await flushActiveScene();
+        if (!saved) {
           setExportFailureStage("save");
           return;
         }
@@ -1216,6 +1307,29 @@ export function EditorPage() {
                 </DragOverlay>
               </DndContext>
             </div>
+          </section>
+
+          <section
+            aria-label="Presenter notes"
+            className="shrink-0 border-t border-sidebar-border px-2.5 py-2.5"
+          >
+            <label
+              htmlFor="presenter-notes"
+              className="px-0.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase"
+            >
+              Presenter notes
+            </label>
+            <textarea
+              id="presenter-notes"
+              data-testid="presenter-notes"
+              value={notesDraft}
+              maxLength={MAX_PRESENTER_NOTES_LENGTH}
+              disabled={isReadOnly}
+              placeholder="Only on your screen while presenting"
+              title="Shown in the presenter window, not on the audience screen"
+              onChange={(event) => handleNotesChange(event.target.value)}
+              className="mt-1.5 h-24 w-full resize-none rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
+            />
           </section>
         </aside>
       ) : null}

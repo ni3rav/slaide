@@ -19,6 +19,11 @@ const PresentationPage = lazy(async () => {
   return { default: module.PresentationPage }
 })
 
+const PresenterPage = lazy(async () => {
+  const module = await import('./ui/PresenterPage.tsx')
+  return { default: module.PresenterPage }
+})
+
 function RouteFallback() {
   return (
     <main className="p-6">
@@ -32,6 +37,7 @@ function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/decks/:deckId/present/notes" element={<PresenterPage />} />
         <Route path="/decks/:deckId/present" element={<PresentationPage />} />
         <Route path="/decks/:deckId" element={<EditorPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
